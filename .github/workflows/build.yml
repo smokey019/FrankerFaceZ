@@ -44,30 +44,8 @@ jobs:
         path: |
           dist
 
-    - name: Deploy (Clean)
-      uses: garygrossgarten/github-action-ssh@release
-      with:
-        command: $HOME/clean-client.sh
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.SSH_USERNAME }}
-        passphrase: ${{ secrets.SSH_PASSPHRASE }}
-        privateKey: ${{ secrets.SSH_PRIVATE_KEY }}
-
-    - name: Deploy (Copy)
-      uses: appleboy/scp-action@v0.1.7
-      with:
-        source: dist
-        target: client
-        strip_components: 1
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.SSH_USERNAME }}
-        key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-    - name: Deploy (Execute)
-      uses: garygrossgarten/github-action-ssh@release
-      with:
-        command:  $HOME/update-client.sh
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.SSH_USERNAME }}
-        passphrase: ${{ secrets.SSH_PASSPHRASE }}
-        privateKey: ${{ secrets.SSH_PRIVATE_KEY }}
+    # Deployment is handled by DigitalOcean App Platform, which builds this repo
+    # directly from the connected branch with FFZ_CDN / FFZ_API set in the app's
+    # build environment (see .do/app.yaml). This workflow only validates the
+    # build and publishes an artifact; the previous SSH/SCP deploy to the
+    # upstream FrankerFaceZ host has been removed for the standalone fork.

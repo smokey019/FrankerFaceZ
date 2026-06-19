@@ -8,8 +8,8 @@ export const EXTENSION = !!__extension__;
 /** Whether or not FrankerFaceZ was loaded from a development server. */
 export const DEBUG = localStorage.ffzDebugMode === 'true' && document.body.classList.contains('ffz-dev') && !EXTENSION;
 
-/** The base URL of the FrankerFaceZ CDN. */
-export const SERVER = DEBUG ? 'https://localhost:8000' : 'https://cdn2.frankerfacez.com';
+/** The base URL of the CDN. Configured at build time via the FFZ_CDN env var. */
+export const SERVER = DEBUG ? 'https://localhost:8000' : __ffz_server__;
 
 let path = `${SERVER}/script`;
 
@@ -22,14 +22,14 @@ if ( EXTENSION ) {
 /** Either the base URL of the FrankerFaceZ CDN or, if FFZ was loaded as a packed web extension, the base URL of the web extension's web accessible files. */
 export const SERVER_OR_EXT = path;
 
-/** The base URL of the FrankerFaceZ API. */
-export const API_SERVER = 'https://api.frankerfacez.com';
+/** The base URL of the API. Configured at build time via the FFZ_API env var. */
+export const API_SERVER = __ffz_api__;
 
-/** The base URL of the FrankerFaceZ staging API. */
-export const STAGING_API = 'https://api-staging.frankerfacez.com';
+/** The base URL of the staging API. Configured via the FFZ_STAGING_API env var. */
+export const STAGING_API = __ffz_staging_api__;
 
-/** The base URL of the FrankerFaceZ staging CDN. */
-export const STAGING_CDN = 'https://cdn-staging.frankerfacez.com';
+/** The base URL of the staging CDN. Configured via the FFZ_STAGING_CDN env var. */
+export const STAGING_CDN = __ffz_staging_cdn__;
 
 /** The base URL of the FrankerFaceZ testing API used for load testing. */
 export const NEW_API = 'https://api2.frankerfacez.com';

@@ -34,6 +34,12 @@ export const STAGING_CDN = __ffz_staging_cdn__;
 /** The base URL of the FrankerFaceZ testing API used for load testing. */
 export const NEW_API = 'https://api2.frankerfacez.com';
 
+/**
+ * The base URL for dynamic content images (user-uploaded emotes, custom
+ * badges, avatars). Configured at build time via the FFZ_IMAGE_CDN env var.
+ */
+export const IMAGE_CDN = __ffz_image_cdn__;
+
 /** The base URL provided to Sentry integrations for automatic error reporting. */
 export const SENTRY_ID = 'https://74b46b3894114f399d51949c6d237489@sentry.frankerfacez.com/2';
 

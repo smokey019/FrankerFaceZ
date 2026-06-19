@@ -15,6 +15,8 @@ declare global {
 	const __ffz_staging_api__: string;
 	/** The configured staging CDN base URL (from the FFZ_STAGING_CDN env var). */
 	const __ffz_staging_cdn__: string;
+	/** The configured content image CDN base URL (from the FFZ_IMAGE_CDN env var). */
+	const __ffz_image_cdn__: string;
 }
 
 export {}

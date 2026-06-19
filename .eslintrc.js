@@ -39,6 +39,7 @@ module.exports = {
 		'__ffz_api__': false,
 		'__ffz_staging_api__': false,
 		'__ffz_staging_cdn__': false,
+		'__ffz_image_cdn__': false,
 		'FrankerFaceZ': false
 	},
 	'rules': {

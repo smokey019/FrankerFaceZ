@@ -32,6 +32,8 @@ const CDN_BASE = stripSlash(process.env.FFZ_CDN || 'https://cdn2.frankerfacez.co
 const API_BASE = stripSlash(process.env.FFZ_API || 'https://api.frankerfacez.com');
 const STAGING_API_BASE = stripSlash(process.env.FFZ_STAGING_API || API_BASE);
 const STAGING_CDN_BASE = stripSlash(process.env.FFZ_STAGING_CDN || CDN_BASE);
+// Dynamic content image CDN (user-uploaded emotes, custom badges, avatars).
+const IMAGE_CDN = stripSlash(process.env.FFZ_IMAGE_CDN || 'https://cdn.frankerfacez.com');
 const DEV_PROXY = stripSlash(process.env.FFZ_DEV_PROXY || CDN_BASE);
 
 // Get the public path.
@@ -49,6 +51,7 @@ console.log('IS SERVE:', DEV_SERVER);
 console.log('FILE PATH:', FILE_PATH);
 console.log('FFZ_CDN:', CDN_BASE);
 console.log('FFZ_API:', API_BASE);
+console.log('FFZ_IMAGE_CDN:', IMAGE_CDN);
 
 
 // Version Stuff
@@ -85,6 +88,12 @@ const COPY_PATTERNS = [
 		// copied verbatim (not run through esbuild), so inject the configured CDN
 		// base here by replacing the __FFZ_CDN__ placeholder in src/entry.js.
 		transform: content => content.toString().replaceAll('__FFZ_CDN__', CDN_BASE)
+	},
+	{
+		// Served at {FFZ_CDN}/script/experiments.json, fetched at runtime by
+		// src/experiments.ts. Absence degrades to all-experiments-off.
+		from: './src/experiments.json',
+		to: 'experiments.json'
 	},
 ];
 
@@ -135,7 +144,11 @@ const config = {
 			? 'auto'
 			: FILE_PATH,
 		path: path.resolve(__dirname, 'dist'),
-		filename: (FOR_EXTENSION || DEV_SERVER)
+		// Entry bundles use stable names so the loader can request them at a
+		// fixed /script/{flavor}.js path (the loader cache-busts with
+		// ?_=<timestamp>). Code-split chunks keep content hashes for caching.
+		filename: '[name].js',
+		chunkFilename: (FOR_EXTENSION || DEV_SERVER)
 			? '[name].js'
 			: '[name].[contenthash:8].js',
 		chunkLoadingGlobal: 'ffzWebpackJsonp',
@@ -187,7 +200,8 @@ const config = {
 				__ffz_server__: JSON.stringify(CDN_BASE),
 				__ffz_api__: JSON.stringify(API_BASE),
 				__ffz_staging_api__: JSON.stringify(STAGING_API_BASE),
-				__ffz_staging_cdn__: JSON.stringify(STAGING_CDN_BASE)
+				__ffz_staging_cdn__: JSON.stringify(STAGING_CDN_BASE),
+				__ffz_image_cdn__: JSON.stringify(IMAGE_CDN)
 			}
 		}),
 		new WebpackManifestPlugin({

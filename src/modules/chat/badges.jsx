@@ -4,7 +4,7 @@
 // Badge Handling
 // ============================================================================
 
-import {NEW_API, SERVER, IS_WEBKIT, IS_FIREFOX, WEBKIT_CSS as WEBKIT, DEBUG} from 'utilities/constants';
+import {NEW_API, API_SERVER, SERVER, IMAGE_CDN, IS_WEBKIT, IS_FIREFOX, WEBKIT_CSS as WEBKIT, DEBUG} from 'utilities/constants';
 
 import {createElement, ManagedStyle} from 'utilities/dom';
 import {has, makeAddonIdChecker, maybe_call, SourcedSet} from 'utilities/object';
@@ -61,16 +61,16 @@ const TWITCH_STYLE_BOT_BADGE = {
 	color: '#00a3a3',
 	css: null,
 	id: 2,
-	image: 'https://cdn.frankerfacez.com/static/badges/twitch/2/bot-badge/1/1.png',
+	image: `${SERVER}/static/badges/twitch/2/bot-badge/1/1.png`,
 	name: 'bot',
 	replaces: true,
 	replaces_type: 'moderator',
 	slot: 1,
 	title: 'Chat Bot',
 	urls: {
-		'1': 'https://cdn.frankerfacez.com/static/badges/twitch/2/bot-badge/1/1.png',
-		'2': 'https://cdn.frankerfacez.com/static/badges/twitch/2/bot-badge/1/2.png',
-		'4': 'https://cdn.frankerfacez.com/static/badges/twitch/2/bot-badge/1/3.png',
+		'1': `${SERVER}/static/badges/twitch/2/bot-badge/1/1.png`,
+		'2': `${SERVER}/static/badges/twitch/2/bot-badge/1/2.png`,
+		'4': `${SERVER}/static/badges/twitch/2/bot-badge/1/3.png`,
 	}
 };
 
@@ -422,8 +422,8 @@ export default class Badges extends Module {
 					color = badge.color || 'transparent';
 
 				if ( ! badge.addon ) {
-					image = `//cdn.frankerfacez.com/badge/${badge.id}/2/rounded`;
-					image1x = `//cdn.frankerfacez.com/badge/${badge.id}/1/rounded`;
+					image = `${IMAGE_CDN}/badge/${badge.id}/2/rounded`;
+					image1x = `${IMAGE_CDN}/badge/${badge.id}/1/rounded`;
 					color = 'transparent';
 				}
 
@@ -1009,7 +1009,7 @@ export default class Badges extends Module {
 
 					// Hacky nonsense.
 					if ( ! full_badge.addon && full_badge.name !== 'bot' ) {
-						bd.image = `//cdn.frankerfacez.com/badge/${badge.id}/4/rounded`;
+						bd.image = `${IMAGE_CDN}/badge/${badge.id}/4/rounded`;
 						bd.color = null;
 					}
 
@@ -1365,7 +1365,7 @@ export default class Badges extends Module {
 		if ( info?.value )
 			return Promise.resolve(info.value);
 
-		return this._woofer_months[user_id] = fetch(`https://api.frankerfacez.com/v1/_user/id/${user_id}`)
+		return this._woofer_months[user_id] = fetch(`${API_SERVER}/v1/_user/id/${user_id}`)
 			.then(resp => resp.ok ? resp.json() : null)
 			.then(data => {
 				let out = null;

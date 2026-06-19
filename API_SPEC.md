@@ -387,21 +387,36 @@ The response has exactly two top-level keys the client reads: `room` (**required
 
 The client **never constructs emote image URLs** — the API supplies fully-formed absolute (or protocol-relative) URL strings, used verbatim for `src`/`srcset`. **All of these should point at the fork's own object storage / image CDN** rather than `cdn.frankerfacez.com`. The patterns below mirror the upstream CDN layout (substitute your CDN host).
 
+### CDN URL grammar (official — from the `cdn.frankerfacez.com` spec)
+
+All images are served by the image CDN (`FFZ_IMAGE_CDN`). `scale` ∈ `1|2|4`. The API emits most of these URLs inside its JSON responses; the client constructs a couple itself (noted below). Responses are `image/png` (animated = APNG).
+
+| Kind | Path |
+|---|---|
+| Emote (static) | `/emote/{emoteID}/{scale}` — or revisioned `/emote/{emoteID}/{revision}/{scale}` (revision default 1) |
+| Emote (animated) | `/emote/{emoteID}/animated/{scale}` (+ `/{revision}/` variant) |
+| Emote mask | `/emote/{emoteID}/mask/{scale}` (+ `animated` and `/{revision}/` variants) |
+| Emote social image | `/emote/twitter_image/{emoteID}` |
+| Badge | `/badge/{badgeID}/{scale}/{style}` — `style` ∈ `square \| rounded \| circular \| transparent \| tinted` |
+| Room mod badge | `/room-badge/mod/id/{twitchID}/{scale}/{style}` (also `/room-badge/mod/{userName}/…` and versioned `…/v/{descriminator}/{scale}/{style}`) |
+| Avatar (Twitch) | `/avatar/twitch/{twitchID}` → 302 redirect (404 if none) |
+| Banner (Twitch) | `/banner/twitch/{twitchID}` → 302 redirect |
+
 ### Emotes
 
-- **Static:** `emote.urls` = `{ "1": url1x, "2"?: url2x, "4"?: url4x }`. Upstream form: `//cdn.frankerfacez.com/emote/{emoteId}/{1|2|4}`. The client uses `urls[1]` as `src` and builds srcset `<url1> 1x, <url2> 2x, <url4> 4x`. Only `1` is required.
-- **Animated:** `emote.animated` = `{ "1", "2"?, "4"? }`. Upstream form: `//cdn.frankerfacez.com/emote/{emoteId}/animated/{1|2|4}`. Used for hover/animated src.
-- **Mask:** `emote.mask` = `{ "1": url, … }`. `mask[1]` used directly as a CSS `-webkit-mask-image`.
+- **Static:** `emote.urls` = `{ "1": url1x, "2"?: url2x, "4"?: url4x }` — emit `{FFZ_IMAGE_CDN}/emote/{id}/{scale}`. The client uses `urls[1]` as `src` and builds srcset `<url1> 1x, <url2> 2x, <url4> 4x`. Only `1` is required.
+- **Animated:** `emote.animated` = `{ "1", "2"?, "4"? }` — emit `{FFZ_IMAGE_CDN}/emote/{id}/animated/{scale}`. Used for hover/animated src.
+- **Mask:** `emote.mask` = `{ "1": url, … }` (→ `/emote/{id}/mask/{scale}`). `mask[1]` used directly as a CSS `-webkit-mask-image`.
 
 ### Badges
 
-- **Non-addon FFZ badges (all global badges from `/v1/badges/ids`):** the client **constructs** the chat image as `{FFZ_IMAGE_CDN}/badge/{id}/{size}/rounded` (size `1`/`2`/`4`), **ignoring** the JSON `urls`/`image`. **Your image CDN must serve this rounded path.** (In this fork the host is the configurable `FFZ_IMAGE_CDN`, no longer hardcoded — `badges.jsx:425/1012`.)
-- The `urls`/`image` you return **should still point at your CDN** (e.g. `…/badge/{id}/{size}`) because the **settings/visibility UI and tooltip previews** use them even for non-addon badges.
+- **Non-addon FFZ badges (all global badges from `/v1/badges/ids`):** the client **constructs** the chat image as `{FFZ_IMAGE_CDN}/badge/{id}/{scale}/rounded` (`rounded` is one of the official styles above), **ignoring** the JSON `urls`/`image`. **Your image CDN must serve this path.** (In this fork the host is the configurable `FFZ_IMAGE_CDN`, no longer hardcoded — `badges.jsx:425/1012`.)
+- The `urls`/`image` you return **should still point at your CDN** because the **settings/visibility UI and tooltip previews** use them even for non-addon badges.
 - **Addon badges** (not produced by this endpoint) use the JSON `urls` (`[1]`/`[2]`/`[4]`) with `image` as fallback.
 
 ### Room custom badges
 
-- `room.mod_urls` / `room.vip_badge` = `{ "1", "2", "4" }`, full URL strings. Upstream forms: `//cdn.frankerfacez.com/room/mod-badge/{twitchId}/{scale}` and `//cdn.frankerfacez.com/room/vip-badge/{twitchId}/{scale}`. Emit your CDN equivalents.
+- `room.mod_urls` / `room.vip_badge` = `{ "1", "2", "4" }`, full URL strings **emitted by the API**. Official CDN form: `/room-badge/mod/id/{twitchID}/{scale}/{style}` (see grammar table). Emit your image-CDN equivalents.
 
 ### Set icon
 
@@ -409,7 +424,7 @@ The client **never constructs emote image URLs** — the API supplies fully-form
 
 ### Avatars (Phase 3)
 
-- Upstream avatar form: `https://cdn.frankerfacez.com/avatar/{provider}/{provider_id}`. Emit your CDN equivalent.
+- Official: `/avatar/twitch/{twitchID}` (302 redirect). The client constructs `{FFZ_IMAGE_CDN}/avatar/{provider}/{provider_id}` (= `/avatar/twitch/{id}` for Twitch) in `manage-ffz-collection.vue:67`.
 
 ### Client-constructed (non-image) links — informational
 
@@ -560,11 +575,11 @@ discover endpoints the client doesn't use but a full backend may want:
 - **Human docs (curl examples, v1 overview):** <https://www.frankerfacez.com/developers>
 - **Swagger UI (interactive):** <https://api.frankerfacez.com/docs/> — multi-spec, with
   selectors `?urls.primaryName=API%20v1`, `?urls.primaryName=API%20v2`, and
-  `?urls.primaryName=CDN`. (These are a JS single-page app; the raw OpenAPI spec
-  files aren't at a guessable path, so they couldn't be machine-scraped here. If you
-  want the exact v2/CDN field definitions reconciled into this doc, grab the spec
-  URL from the browser's Network tab — it's the `.json`/`.yaml` request Swagger
-  loads — and share it.)
+  `?urls.primaryName=CDN`.
+- **Raw OpenAPI spec files** (reconciled into this doc — CDN grammar in §7, full v2 surface in §11):
+  - API v2: <https://api.frankerfacez.com/v2/swagger.json>
+  - CDN: <https://cdn.frankerfacez.com/swagger.json>
+  - Auth: <https://api.frankerfacez.com/auth/swagger.json>
 
 ### Additional upstream v1 endpoints (per the Developers page, not currently used by the client)
 
@@ -584,3 +599,137 @@ The client only needs the endpoints in §3–§6. For completeness, the upstream
 > Note the upstream `_`-prefixed variants (`/_badge`, `/_room`, `/_user`, `/_badges`)
 > return the same object **minus** the heavy association data — a useful pattern to
 > mirror, but only `/v1/_user/id/{id}` (§9) is actually called by the client.
+
+---
+
+## 11. Official v2 API surface (full reference)
+
+Reconciled from `https://api.frankerfacez.com/v2/swagger.json` and
+`https://api.frankerfacez.com/auth/swagger.json`. **Base:** `https://api.frankerfacez.com`,
+title "FrankerFaceZ", version **2.0** (marked Work-In-Progress; v1 deprecated but
+still supported). **The client only consumes a small subset** (see §11.6) — the rest
+exists for a full website/backend and is documented here for parity.
+
+### 11.1 Authentication (OAuth 2.0)
+
+Modern v2 uses **OAuth 2.0 Authorization Code** with `Authorization: Bearer {token}`:
+
+- `GET /auth/authorize` — params `client_id` (req), `redirect_uri` (req), `scope` (space-separated), `verify` (bool). Returns auth form / redirects with `code`.
+- `POST /auth/token` — exchange `code` (or refresh) for `{ access_token, refresh_token, expires_in }` (token ≤64 chars).
+- `GET /auth/login` / `GET /auth/logout` / `GET /auth/relog` — Twitch session login/logout (params `next`, `force`).
+- `GET /auth/secure` (scope `site`) / `POST /auth/secure` (header `X-OTP`) — session-security / enable 2FA.
+
+**Scopes:** `admin`, `channel_badges`, `collection_delete`, `collection_edit`, `collection_manage`, `emote_delete`, `emote_report`, `emote_upload`, `queue`, `strings_upload`, `transactions`, `user_profile`, `user_read`, `extension`, `site`.
+
+**2FA:** protected endpoints return `401 { msg_id: "2fa_needed" }`; retry with header `X-OTP: {code}`; bad code → `403 { msg_id: "2fa_invalid" }`. Other `msg_id`s: `2fa_disabled`, `missing_scope`, `missing_role`, `missing_admin`, `session_insecure`, `session_stale`.
+
+> ⚠️ **Auth discrepancy that matters for a 1:1 fork.** The current **client** (`src/socket.js:205`) does NOT use this OAuth2 flow — it uses a **legacy, undocumented SSE challenge** at `GET /auth/ext_verify/{userId}` (a `#frankerfacezauthorizer` Twitch-chat PRIVMSG challenge → `token` event; see §9). That endpoint is **not in the auth swagger**. To be 1:1 with the existing client you must implement the legacy SSE `ext_verify` flow; the recommended alternative (noted in the project plan) is to modernize the client to this OAuth2 flow instead.
+
+### 11.2 Rate limiting (GCRA leaky bucket, 60s window)
+
+| Token type | Rate | Bucket |
+|---|---|---|
+| User token | 120 pts / user / client | 120 |
+| App token | 300 pts / client | 300 |
+| No token | 120 pts / IP | 120 |
+
+Headers: `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, `Retry-After`. Most reads cost **1 pt**; uploads/submissions/analysis cost **10 pts**.
+
+### 11.3 v2 endpoint catalog
+
+Every response that returns emotes/collections includes a `templates: { static, animated }` URL-template block. All require `Authorization: Bearer` unless marked anonymous.
+
+| Method | Path | Scope | Notes |
+|---|---|---|---|
+| GET | `/v2/emote/{emoteID}` | — (anon) | `{ templates, emote: Emote }` |
+| POST | `/v2/emote/{emoteId}/report` | `emote_report` | body `{ report: string }` → `{ success: bool }` |
+| POST | `/v2/emote/submit` | `emote_upload` | multipart (name, image≤5MB, dpi, trim…) → `{ job_id }` |
+| GET | `/v2/emote/submit/{jobId}` | `emote_upload` | `{ job_id, status, templates, emote }` |
+| POST | `/v2/emote/analyse` | `emote_upload` | multipart `image` → `{ job_id }` |
+| GET | `/v2/emote/analyse/{jobId}` | `emote_upload` | job status |
+| GET | `/v2/emote/{emoteID}/collections/editable` | `collection_*` | `{ templates, emote, collections: {[id]: Collection} }` |
+| GET | `/v2/collections/editable` | `collection_*` | `{ collections: [Collection] }` |
+| GET | `/v2/collection/{collectionID}` | — | params `unapproved`, `owners`, `sort`, `page`, `per_page` → `{ templates, collection, pages, total, emotes: [Emote] }` |
+| GET | `/v2/collection/{collectionID}/emote/{emoteID}` | — | `{ templates, collection, emote }` |
+| PUT | `/v2/collection/{collectionID}/emote/{emoteID}` | `collection_edit` | optional `code`; 201 / 409 (full) |
+| DELETE | `/v2/collection/{collectionID}/emote/{emoteID}` | `collection_edit` | `{ collection }` |
+| POST | `/v2/badge/submit` | `emote_upload` | multipart (type, channel, image) → `{ job_id }` |
+| GET | `/v2/badge/submit/{jobId}` | `emote_upload` | job status |
+| GET | `/v2/subscription/status` | `extension` or `user_read` | param `include` (plan\|collection\|badge); see schema below |
+| GET | `/v2/subscriptions` | `transactions` | filters plan/status/user/payer/gifter/recipient; `include` actions\|gateway_plan\|plan\|collection\|badge |
+| GET | `/v2/transactions` | `transactions` | filters; `include` reciept\|plan\|collection\|badge |
+| POST | `/v2/setting/badge` | `user_profile` | body `{ user, slots: {slotId: badgeId} }` → `{ user_id, available, active, badges }` |
+| GET/POST/DELETE | `/v2/setting/2fa` (+`/codes`) | `user_read`/`site` | TOTP setup/confirm/disable, recovery codes |
+| GET/POST | `/v2/oauth/clients`, `GET/PATCH/DELETE /v2/oauth/client/{id}` (+`/secret`) | `site` | OAuth app management (2FA-gated) |
+| GET | `/v2/oauth/grants`, `DELETE /v2/oauth/grant/{id}` | `site` | authorized-app grants |
+
+### 11.4 Core schemas (v2)
+
+```
+Emote {
+  id:int, created_at:datetime, updated_at:datetime?, name:string,
+  width:int, height:int, scales:[1|2|4], public:bool, hidden:bool,
+  use_count:int, status:int, deleted:bool, animated:bool, mask:bool,
+  mask_animated:bool, modifier:bool, modifier_flags:int,
+  offset:string?, margins:string?, css:string?,
+  owner:User, artist:User?
+}
+User { id:int, provider:string, provider_id:string, name:string, display_name:string? }
+Collection {
+  id:int, created_at:datetime?, updated_at:datetime?, type:string,
+  icon:string?, title:string?, description:string?, css:string?,
+  emotes:[int], count:int, limit:int?, owner:User
+}
+Badge (v2) { id:int, name:string, title:string, slot:int, replaces:string?, color:string?, css:string? }
+Subscription {
+  id:int, created_at, updated_at?, plan_id:int,
+  status:"active"|"cancelled"|"paused", gateway:string, gateway_id:string?,
+  gateway_plan_id:int?, next_bill_date:datetime?, months:int,
+  started_at:datetime?, expires_at:datetime?, can_cancel:bool, can_update:bool,
+  owner:User?, recipient:User?
+}
+SubscriptionPlan {
+  id:int, created_at, updated_at?, name:string, description:string?,
+  permanent_roles:[string]?, temporary_roles:[string]?,
+  permanent_collections:[int]?, temporary_collections:[int]?,
+  permanent_badges:[int]?, temporary_badges:[int]?
+}
+SubscriptionGatewayPlan {
+  id:int, plan_id:int, gateway:string, gateway_id:string, months:int,
+  recurring:bool, prices:{ title, customizable:bool, currency, price, tax, total }
+}
+Transaction {
+  id:int, created_at, updated_at?, status:string, owner:User?, recipient:User?,
+  reciept_url:string?, gateway:string, gateway_id:string?, gateway_plan_id:int?,
+  price:number, total:number, native_currency:string, native_price:number,
+  native_total:number, subscription:SubscriptionPartial?
+}
+OAuthClient { id, secret, created_at?, updated_at?, owner:User?, redirect_uris:[string]?, hook_uri?, name, logo?, website?, description?, author_name?, author_email?, users:int, rate_user?, rate_app? }
+```
+
+`/v2/subscription/status` response (used by the client's sub promo UI):
+```
+{ user: { id, provider, provider_id, name, display_name,
+          bonus_month_eligible:bool, available_badges:[int],
+          active_subs: { [planId]: { id, expires_at, next_bill_date } } },
+  plans?: {...}, collections?: {...}, badges?: {...} }
+```
+
+### 11.5 Note on `/payment/plans`
+
+The client (§9) also reads `/payment/plans` for sub pricing, but that path is **not in
+the v2 swagger** above — it's a separate payment endpoint. Verify its shape against the
+client's `emote_menu.jsx` sub-price parser when implementing paid subs (Phase 3, optional).
+
+### 11.6 What the client actually consumes (the only must-haves for a working fork)
+
+Everything else in §11 is for a full website/backend. The **client** only calls:
+
+- `POST /v2/emote/{id}/report` (scope `emote_report`) — emote reporting.
+- `GET /v2/emote/{id}/collections/editable` + `PUT`/`DELETE /v2/collection/{cid}/emote/{eid}` (scope `collection_edit`) — personal collections.
+- `GET /v2/subscription/status` + `/payment/plans` — the sub-status / promo UI.
+- `GET /v1/_user/id/{id}` (anonymous, §9) — subwoofer badge.
+- The legacy `GET /auth/ext_verify/{userId}` SSE (§9, §11.1) — to mint the bearer token.
+
+If you don't need reporting / collections / paid subs (per the project plan, these are
+optional), you can skip all of §11 and ship only the v1 endpoints in §3–§6.

@@ -623,7 +623,7 @@ Modern v2 uses **OAuth 2.0 Authorization Code** with `Authorization: Bearer {tok
 
 **2FA:** protected endpoints return `401 { msg_id: "2fa_needed" }`; retry with header `X-OTP: {code}`; bad code → `403 { msg_id: "2fa_invalid" }`. Other `msg_id`s: `2fa_disabled`, `missing_scope`, `missing_role`, `missing_admin`, `session_insecure`, `session_stale`.
 
-> ⚠️ **Auth discrepancy that matters for a 1:1 fork.** The current **client** (`src/socket.js:205`) does NOT use this OAuth2 flow — it uses a **legacy, undocumented SSE challenge** at `GET /auth/ext_verify/{userId}` (a `#frankerfacezauthorizer` Twitch-chat PRIVMSG challenge → `token` event; see §9). That endpoint is **not in the auth swagger**. To be 1:1 with the existing client you must implement the legacy SSE `ext_verify` flow; the recommended alternative (noted in the project plan) is to modernize the client to this OAuth2 flow instead.
+> ✅ **Auth decision for this fork: use OAuth 2.0** (this documented flow), **not** the legacy SSE method. The current **client** (`src/socket.js:205`) still uses a **legacy, undocumented SSE challenge** at `GET /auth/ext_verify/{userId}` (a `#frankerfacezauthorizer` Twitch-chat PRIVMSG challenge → `token` event; see §9, which describes today's client). As part of **Phase 3**, the client's `socket.js` auth will be **modernized to this OAuth 2.0 Authorization-Code flow** (Bearer tokens); the legacy `ext_verify` SSE will **not** be reimplemented server-side. Implement `/auth/authorize` + `/auth/token` (and the scopes/2FA above) in the API repo.
 
 ### 11.2 Rate limiting (GCRA leaky bucket, 60s window)
 

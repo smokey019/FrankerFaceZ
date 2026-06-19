@@ -1,0 +1,76 @@
+# ===========================================================================
+# DigitalOcean App Platform spec — FrankerFaceZ fork CLIENT (this repo)
+# ===========================================================================
+# The website + data API live in a SEPARATE, PRIVATE repo with their own app
+# spec. This spec only builds & serves the client bundle (cdn.* subdomain).
+#
+# Topology: split subdomains
+#   - cdn.example.com  -> this static site (loader, chunks, fonts, css, json)
+#   - api.example.com  -> the API service (separate private repo)
+#
+# This is a STARTING SCAFFOLD. Validate fields against the current app spec:
+#   https://docs.digitalocean.com/products/app-platform/reference/app-spec/
+# Replace every TODO before deploying. See STANDALONE.md for the full serving
+# contract (especially the loader -> hashed-bundle mapping) and CORS details.
+# ===========================================================================
+
+name: ffz-client
+region: nyc
+
+static_sites:
+  - name: client
+    github:
+      repo: YOUR_ORG/YOUR_FORK          # TODO: your fork of this client repo
+      branch: master
+      deploy_on_push: true
+
+    # bun is detected from packageManager (bun@1.3.10) / bun.lock. If the
+    # buildpack can't provide bun, switch to a Dockerfile build instead.
+    build_command: bun install --frozen-lockfile && bun run build
+    output_dir: dist
+
+    # Build-time host configuration (baked into the bundle by webpack).
+    # TODO: set to your real domains once you own them.
+    envs:
+      - key: FFZ_CDN
+        scope: BUILD_TIME
+        value: https://cdn.example.com
+      - key: FFZ_API
+        scope: BUILD_TIME
+        value: https://api.example.com
+      - key: FFZ_STAGING_API
+        scope: BUILD_TIME
+        value: https://api.example.com
+      - key: FFZ_STAGING_CDN
+        scope: BUILD_TIME
+        value: https://cdn.example.com
+
+# Attach the CDN subdomain to this app.
+domains:
+  - domain: cdn.example.com             # TODO: your client/CDN domain
+    type: PRIMARY
+
+# The client is loaded + fetched cross-origin from twitch.tv. Scripts use
+# crossorigin="anonymous", and fonts/JSON fetches require CORS too, so every
+# asset must be served with permissive CORS. (Public, credential-less assets,
+# so "*" is appropriate.)
+#
+# NOTE: header/CORS control on App Platform STATIC SITES has historically been
+# limited. If the ingress cors policy below isn't honored for the static site,
+# the robust alternative is to serve dist/ from a tiny service component (or
+# DigitalOcean Spaces + CDN with a CORS policy) that you fully control.
+ingress:
+  rules:
+    - match:
+        path:
+          prefix: /
+      component:
+        name: client
+      cors:
+        allow_origins:
+          - regex: "^https://([a-z0-9-]+\\.)?twitch\\.tv$"
+        allow_methods:
+          - GET
+          - HEAD
+        allow_headers:
+          - "*"

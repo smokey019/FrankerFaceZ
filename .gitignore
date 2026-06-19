@@ -1,5 +1,6 @@
 node_modules
 npm-debug.log
+bun.lockb
 dist
 typedist
 Extension Building
@@ -11,3 +12,5 @@ stats.json
 *.iml
 credentials.json
 .fontello-session
+/.claude
+CLAUDE.md

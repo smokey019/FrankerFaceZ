@@ -389,6 +389,8 @@ body .chat-room .chat-line__message:not(.chat-line--inline):nth-child(1n+0)[data
 			return;
 
 		const messages = node.querySelectorAll('.vcml-message:not([data-ffz-emotes])');
+		// eslint-disable-next-line no-console
+		console.log('[FFZ ModLogs] process — total vcml:', node.querySelectorAll('.vcml-message').length, 'unprocessed:', messages.length);
 		if ( ! messages.length )
 			return;
 
@@ -396,6 +398,8 @@ body .chat-room .chat-line__message:not(.chat-line--inline):nth-child(1n+0)[data
 		const chat_inst = Array.from(this.parent.ChatService?.instances || [])[0],
 			room_id = chat_inst?.props?.channelID,
 			room_login = chat_inst?.props?.channelLogin;
+		// eslint-disable-next-line no-console
+		console.log('[FFZ ModLogs] room:', room_login, room_id, 'instances:', Array.from(this.parent.ChatService?.instances || []).length);
 
 		for ( const el of messages ) {
 			el.setAttribute('data-ffz-emotes', 'true');
@@ -419,6 +423,9 @@ body .chat-room .chat-line__message:not(.chat-line--inline):nth-child(1n+0)[data
 				roomID: room_id,
 				roomLogin: room_login
 			}, null);
+
+			// eslint-disable-next-line no-console
+			console.log('[FFZ ModLogs] text:', JSON.stringify(text), '→', tokens && tokens.length, 'tokens; types:', tokens && tokens.map(tok => tok && tok.type), '; emotes:', tokens && tokens.filter(tok => tok && tok.type && tok.type !== 'text').length);
 
 			// Only swap in our render if we actually found emotes.
 			if ( ! tokens || ! tokens.some(tok => tok && tok.type && tok.type !== 'text') )

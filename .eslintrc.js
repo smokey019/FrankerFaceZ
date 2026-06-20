@@ -35,6 +35,11 @@ module.exports = {
 		'__version_patch__': false,
 		'__version_prerelease__': false,
 		'__extension__': false,
+		'__ffz_server__': false,
+		'__ffz_api__': false,
+		'__ffz_staging_api__': false,
+		'__ffz_staging_cdn__': false,
+		'__ffz_image_cdn__': false,
 		'FrankerFaceZ': false
 	},
 	'rules': {

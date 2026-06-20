@@ -5,7 +5,7 @@
 // ============================================================================
 
 import {has, get, once, maybe_call, set_equals, getTwitchEmoteURL, getTwitchEmoteSrcSet, deep_equals} from 'utilities/object';
-import {TWITCH_GLOBAL_SETS, EmoteTypes, TWITCH_POINTS_SETS, TWITCH_PRIME_SETS, WEBKIT_CSS as WEBKIT, IS_OSX, KNOWN_CODES, REPLACEMENT_BASE, REPLACEMENTS, KEYS} from 'utilities/constants';
+import {SERVER, TWITCH_GLOBAL_SETS, EmoteTypes, TWITCH_POINTS_SETS, TWITCH_PRIME_SETS, WEBKIT_CSS as WEBKIT, IS_OSX, KNOWN_CODES, REPLACEMENT_BASE, REPLACEMENTS, KEYS} from 'utilities/constants';
 import {HIDDEN_CATEGORIES, CATEGORIES, CATEGORY_SORT, IMAGE_PATHS} from 'src/modules/chat/emoji';
 import {ClickOutside} from 'utilities/dom';
 
@@ -441,7 +441,7 @@ export default class EmoteMenu extends Module {
 
 		this.updateEmojiVariables();
 
-		this.css_tweaks.setVariable('emoji-menu--sheet', `//cdn.frankerfacez.com/static/emoji/images/sheet-twemoji-36.png`);
+		this.css_tweaks.setVariable('emoji-menu--sheet', `${SERVER}/static/emoji/images/sheet-twemoji-36.png`);
 		this.css_tweaks.setVariable('emoji-menu--count', 58);
 		this.css_tweaks.setVariable('emoji-menu--size', 36);
 
@@ -492,7 +492,7 @@ export default class EmoteMenu extends Module {
 	updateEmojiVariables() {
 
 		const style = this.chat.context.get('chat.emoji.style') || 'twitter',
-			base = `//cdn.frankerfacez.com/static/emoji/images/sheet-${IMAGE_PATHS[style] || 'twemoji'}-`;
+			base = `${SERVER}/static/emoji/images/sheet-${IMAGE_PATHS[style] || 'twemoji'}-`;
 
 		const emoji_size = this.emoji_size = 36,
 			sheet_count = this.emoji_sheet_count = 58,

@@ -13,16 +13,16 @@ Developing
 ==========
 
 FrankerFaceZ uses node.js to manage development dependencies and to run an HTTP
-server for development. This project uses the [pnpm](https://pnpm.io/) package
+server for development. This project uses [bun](https://bun.sh/) as its package
 manager. To get everything you need:
 
-1. Install node.js and [pnpm](https://pnpm.io/)
-2. Run `pnpm install` within the FrankerFaceZ directory.
+1. Install node.js and [bun](https://bun.sh/)
+2. Run `bun install` within the FrankerFaceZ directory.
 
 
-From there, you can use npm to build FrankerFaceZ from source simply by
-running `pnpm build`. For development, you can instruct webpack to watch
-the source files for changes and re-build automatically with `pnpm start`
+From there, you can build FrankerFaceZ from source simply by running
+`bun run build`. For development, you can instruct webpack to watch the
+source files for changes and re-build automatically with `bun start`
 
 FrankerFaceZ comes with a local development server that listens on port 8000
 and it serves up local development copies of files, falling back to the CDN
@@ -44,13 +44,13 @@ localStorage.ffzDebugMode = true;
 
 ---
 
-You can edit the project's icon font using the `pnpm font` command. This will
+You can edit the project's icon font using the `bun run font` command. This will
 create a new Fontello session, if one doesn't already exist, and open your
 default web browser to Fontello so you can edit the font.
 
-If you're running the development server with `pnpm start`, you'll be able to
+If you're running the development server with `bun start`, you'll be able to
 automatically save changes to the Fontello font by clicking Fontello's Export
-button. Otherwise, you can use `pnpm font:save` to download the changes
+button. Otherwise, you can use `bun run font:save` to download the changes
 from your session.
 
 

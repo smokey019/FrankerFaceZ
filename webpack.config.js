@@ -21,12 +21,27 @@ const DEV_BUILD = process.env.NODE_ENV !== 'production';
 // Is this for an extension?
 const FOR_EXTENSION = !! process.env.FFZ_EXTENSION;
 
+// --- Standalone fork host configuration -------------------------------------
+// Every FrankerFaceZ-operated host the client talks to is configurable at build
+// time so this fork can point at its own infrastructure. Set these in your
+// DigitalOcean App Platform build environment (or a local .env) before a
+// production build. They default to the upstream FFZ hosts so the client keeps
+// working during development until your own servers exist.
+const stripSlash = value => value.replace(/\/+$/, '');
+const CDN_BASE = stripSlash(process.env.FFZ_CDN || 'https://cdn2.frankerfacez.com');
+const API_BASE = stripSlash(process.env.FFZ_API || 'https://api.frankerfacez.com');
+const STAGING_API_BASE = stripSlash(process.env.FFZ_STAGING_API || API_BASE);
+const STAGING_CDN_BASE = stripSlash(process.env.FFZ_STAGING_CDN || CDN_BASE);
+// Dynamic content image CDN (user-uploaded emotes, custom badges, avatars).
+const IMAGE_CDN = stripSlash(process.env.FFZ_IMAGE_CDN || 'https://cdn.frankerfacez.com');
+const DEV_PROXY = stripSlash(process.env.FFZ_DEV_PROXY || CDN_BASE);
+
 // Get the public path.
 const FILE_PATH = DEV_SERVER
 	? 'https://localhost:8000/script/'
 	: FOR_EXTENSION
 		? ''
-		: 'https://cdn2.frankerfacez.com/static/';
+		: `${CDN_BASE}/static/`;
 
 
 console.log('NODE_ENV:', process.env.NODE_ENV);
@@ -34,6 +49,9 @@ console.log('FOR_EXTENSION:', FOR_EXTENSION, FOR_EXTENSION ? ` (${process.env.FF
 console.log('IS_DEV_BUILD:', DEV_BUILD);
 console.log('IS SERVE:', DEV_SERVER);
 console.log('FILE PATH:', FILE_PATH);
+console.log('FFZ_CDN:', CDN_BASE);
+console.log('FFZ_API:', API_BASE);
+console.log('FFZ_IMAGE_CDN:', IMAGE_CDN);
 
 
 // Version Stuff
@@ -65,7 +83,17 @@ const COPY_PATTERNS = [
 			: './src/entry.js',
 		to: (DEV_SERVER || DEV_BUILD)
 			? 'script.js'
-			: 'script.min.js'
+			: 'script.min.js',
+		// The loader runs before the bundle and can't import constants, and it's
+		// copied verbatim (not run through esbuild), so inject the configured CDN
+		// base here by replacing the __FFZ_CDN__ placeholder in src/entry.js.
+		transform: content => content.toString().replaceAll('__FFZ_CDN__', CDN_BASE)
+	},
+	{
+		// Served at {FFZ_CDN}/script/experiments.json, fetched at runtime by
+		// src/experiments.ts. Absence degrades to all-experiments-off.
+		from: './src/experiments.json',
+		to: 'experiments.json'
 	},
 ];
 
@@ -116,7 +144,11 @@ const config = {
 			? 'auto'
 			: FILE_PATH,
 		path: path.resolve(__dirname, 'dist'),
-		filename: (FOR_EXTENSION || DEV_SERVER)
+		// Entry bundles use stable names so the loader can request them at a
+		// fixed /script/{flavor}.js path (the loader cache-busts with
+		// ?_=<timestamp>). Code-split chunks keep content hashes for caching.
+		filename: '[name].js',
+		chunkFilename: (FOR_EXTENSION || DEV_SERVER)
 			? '[name].js'
 			: '[name].[contenthash:8].js',
 		chunkLoadingGlobal: 'ffzWebpackJsonp',
@@ -164,7 +196,12 @@ const config = {
 				__git_commit__: JSON.stringify(commit_hash),
 				__extension__: FOR_EXTENSION
 					? JSON.stringify(process.env.FFZ_EXTENSION)
-					: JSON.stringify(false)
+					: JSON.stringify(false),
+				__ffz_server__: JSON.stringify(CDN_BASE),
+				__ffz_api__: JSON.stringify(API_BASE),
+				__ffz_staging_api__: JSON.stringify(STAGING_API_BASE),
+				__ffz_staging_cdn__: JSON.stringify(STAGING_CDN_BASE),
+				__ffz_image_cdn__: JSON.stringify(IMAGE_CDN)
 			}
 		}),
 		new WebpackManifestPlugin({
@@ -344,7 +381,7 @@ if ( DEV_SERVER )
 		proxy: [
 			{
 				context: ['**'],
-				target: 'https://cdn2.frankerfacez.com/',
+				target: `${DEV_PROXY}/`,
 				changeOrigin: true
 			},
 		],
@@ -356,7 +393,7 @@ if ( DEV_SERVER )
 			});
 
 			devServer.app.get('/update_font', (req, res) => {
-				const proc = exec('npm run font:save');
+				const proc = exec('bun run font:save');
 
 				proc.stdout.on('data', data => {
 					console.log('FONT>>', data);

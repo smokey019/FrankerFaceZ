@@ -251,6 +251,14 @@ const VER: ClientVersion = FrankerFaceZ.version_info = Object.freeze({
 		`${VER.major}.${VER.minor}.${VER.revision}${VER.build ? `.${VER.build}` : ''}${VER.extra || ''}${DEBUG ? '-dev' : ''}`
 });
 
+// Launch banner — confirms THIS custom build loaded, its version (incl. the
+// .build number), and the commit it was built from.
+console.log(
+	`%c FFZ Fork %c v${VER}${VER.commit ? ` · ${(VER.commit + '').slice(0, 8)}` : ''}${VER.build ? '' : '  ⚠️ no build number — running upstream/original FFZ, or built without git history'} loaded`,
+	'background:#755000;color:#fff;border-radius:3px;font-weight:bold',
+	'color:inherit'
+);
+
 
 export default FrankerFaceZ;
 

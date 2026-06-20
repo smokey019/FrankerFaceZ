@@ -8,8 +8,13 @@
 	if ( /disable_frankerfacez/.test(location.search) )
 		return;
 
-	if ( document.body.dataset.ffzSource )
+	if ( document.body.dataset.ffzSource ) {
+		console.log(
+			'%c FFZ Fork %c loader SKIPPED — FrankerFaceZ was already loaded by "' + document.body.dataset.ffzSource + '". Disable the other FFZ (e.g. the official extension/userscript) to use this build.',
+			'background:#755000;color:#fff;border-radius:3px;font-weight:bold', 'color:inherit'
+		);
 		return;
+	}
 
 	document.body.dataset.ffzSource = 'script';
 
@@ -28,6 +33,11 @@
 
 	if (FLAVOR === 'clips' && location.pathname === '/embed')
 		FLAVOR = 'player';
+
+	console.log(
+		'%c FFZ Fork %c loader running — loading "' + FLAVOR + '" from ' + SERVER + (SERVER.indexOf('cdn2.frankerfacez.com') !== -1 ? '  ⚠️ this is the ORIGINAL FFZ CDN — set FFZ_CDN in your DO build to your own host!' : ''),
+		'background:#755000;color:#fff;border-radius:3px;font-weight:bold', 'color:inherit'
+	);
 
 	script.id = 'ffz-script';
 	script.async = true;

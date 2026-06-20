@@ -74,6 +74,20 @@
 		font-variant-numeric: tabular-nums;
 	}
 
+	&__content {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	&__badges {
+		white-space: nowrap;
+	}
+
+	&__user {
+		font-weight: 700;
+		word-break: break-all;
+	}
+
 	&__msg img {
 		vertical-align: middle;
 	}

@@ -73,6 +73,16 @@ export default class ViewerCards extends Module {
 			}
 		});
 
+		this.settings.add('chat.viewer-cards.session-logs.show-username', {
+			default: true,
+			ui: {
+				path: 'Chat > Viewer Cards >> Session Logs',
+				title: 'Show the username and badges on each line, like chat.',
+				description: 'Displays the user\'s badges and their name (in their chat color) before each message, so the logs read like normal chat.',
+				component: 'setting-check-box'
+			}
+		});
+
 		this.ViewerCard = this.fine.define(
 			'chat-viewer-card',
 			n => n.props?.targetLogin && n.props?.hideViewerCard
@@ -133,7 +143,15 @@ export default class ViewerCards extends Module {
 			ts: msg.timestamp || Date.now(),
 			tokens: msg.ffz_tokens,
 			text: msg.message,
-			deleted: !! msg.deleted
+			deleted: !! msg.deleted,
+			// Kept so each line can be rendered like chat: badges + colored name.
+			user: msg.user,
+			badges: msg.badges,
+			ffz_badges: msg.ffz_badges,
+			badgeDynamicData: msg.badgeDynamicData,
+			roomID: msg.roomID,
+			roomLogin: msg.roomLogin,
+			sourceRoomID: msg.sourceRoomID
 		});
 
 		if ( arr.length > this.LOG_LIMIT )
@@ -161,9 +179,51 @@ export default class ViewerCards extends Module {
 			return `${`${d.getHours()}`.padStart(2, '0')}:${`${d.getMinutes()}`.padStart(2, '0')}`;
 		};
 
+		const processColor = raw => {
+			if ( ! raw )
+				return null;
+			try {
+				const colors = t.parent && t.parent.colors;
+				return colors ? colors.process(raw) : raw;
+			} catch(err) {
+				return raw;
+			}
+		};
+
+		const renderLine = (log, idx, show_user) => {
+			const content = [];
+
+			if ( show_user ) {
+				const badges = (log.badges || log.ffz_badges)
+					? t.chat.badges.render(log, e, false, true)
+					: null;
+				if ( badges && badges.length )
+					content.push(e('span', {key: 'badges', className: 'ffz--vc-logs__badges'}, badges));
+
+				content.push(e('span', {
+					key: 'user',
+					className: 'ffz--vc-logs__user',
+					style: {color: processColor(log.user && log.user.color)}
+				}, (log.user && (log.user.displayName || log.user.login)) || ''));
+				content.push(e('span', {key: 'colon', className: 'ffz--vc-logs__colon'}, ': '));
+			}
+
+			content.push(e('span', {key: 'msg', className: 'ffz--vc-logs__msg'},
+				log.tokens ? t.chat.renderTokens(log.tokens, e) : log.text));
+
+			return e('div', {
+				key: log.id || idx,
+				className: `ffz--vc-logs__line${log.deleted ? ' ffz--vc-logs__line--deleted' : ''}`
+			}, [
+				e('span', {key: 'time', className: 'ffz--vc-logs__time'}, formatTime(log.ts)),
+				e('span', {key: 'content', className: 'ffz--vc-logs__content'}, content)
+			]);
+		};
+
 		const SessionLogs = props => {
 			const login = props.login,
 				logs = t.getSessionLogs(login),
+				show_user = !! t.chat.context.get('chat.viewer-cards.session-logs.show-username'),
 				[open, setOpen] = React.useState(() => !! t.chat.context.get('chat.viewer-cards.session-logs.start-open'));
 
 			return e('div', {className: `ffz--vc-logs${open ? ' ffz--vc-logs--open' : ''}`}, [
@@ -180,14 +240,7 @@ export default class ViewerCards extends Module {
 				open
 					? e('div', {key: 'body', className: 'ffz--vc-logs__body'},
 						logs.length
-							? logs.map((log, idx) => e('div', {
-								key: log.id || idx,
-								className: `ffz--vc-logs__line${log.deleted ? ' ffz--vc-logs__line--deleted' : ''}`
-							}, [
-								e('span', {key: 't', className: 'ffz--vc-logs__time'}, formatTime(log.ts)),
-								e('span', {key: 'm', className: 'ffz--vc-logs__msg'},
-									log.tokens ? t.chat.renderTokens(log.tokens, e) : log.text)
-							]))
+							? logs.map((log, idx) => renderLine(log, idx, show_user))
 							: e('div', {className: 'ffz--vc-logs__empty'}, 'No messages from this user yet this session.')
 					)
 					: null

@@ -360,37 +360,37 @@ body .chat-room .chat-line__message:not(.chat-line--inline):nth-child(1n+0)[data
 			return;
 
 		if ( this.mod_log_observers.has(inst) ) {
-			this.processModLogs(inst);
+			this.scheduleModLogs();
 			return;
 		}
 
-		const node = this.fine.getChildNode(inst);
-		if ( ! node || ! node.querySelectorAll )
-			return;
-
-		const observer = new MutationObserver(() => this.processModLogs(inst));
-		observer.observe(node, {childList: true, subtree: true});
-		this.mod_log_observers.set(inst, {observer, node});
-		this.processModLogs(inst);
+		// Twitch renders the mod logs outside the card's own DOM node, so we
+		// observe broadly while a card is open and bound the observer to it.
+		const observer = new MutationObserver(() => this.scheduleModLogs());
+		observer.observe(document.body, {childList: true, subtree: true});
+		this.mod_log_observers.set(inst, observer);
+		this.scheduleModLogs();
 	}
 
 	teardownModLogTokenizer(inst) {
-		const data = inst && this.mod_log_observers.get(inst);
-		if ( data ) {
-			data.observer.disconnect();
+		const observer = inst && this.mod_log_observers.get(inst);
+		if ( observer ) {
+			observer.disconnect();
 			this.mod_log_observers.delete(inst);
 		}
 	}
 
-	processModLogs(inst) {
-		const data = this.mod_log_observers.get(inst),
-			node = (data && data.node) || this.fine.getChildNode(inst);
-		if ( ! node || ! node.querySelectorAll )
+	scheduleModLogs() {
+		if ( this._mod_log_raf )
 			return;
+		this._mod_log_raf = requestAnimationFrame(() => {
+			this._mod_log_raf = null;
+			this.processModLogs();
+		});
+	}
 
-		const messages = node.querySelectorAll('.vcml-message:not([data-ffz-emotes])');
-		// eslint-disable-next-line no-console
-		console.log('[FFZ ModLogs] process — total vcml:', node.querySelectorAll('.vcml-message').length, 'unprocessed:', messages.length);
+	processModLogs() {
+		const messages = document.querySelectorAll('.vcml-message:not([data-ffz-emotes])');
 		if ( ! messages.length )
 			return;
 
@@ -399,7 +399,7 @@ body .chat-room .chat-line__message:not(.chat-line--inline):nth-child(1n+0)[data
 			room_id = chat_inst?.props?.channelID,
 			room_login = chat_inst?.props?.channelLogin;
 		// eslint-disable-next-line no-console
-		console.log('[FFZ ModLogs] room:', room_login, room_id, 'instances:', Array.from(this.parent.ChatService?.instances || []).length);
+		console.log('[FFZ ModLogs] processing', messages.length, 'messages; room:', room_login, room_id);
 
 		for ( const el of messages ) {
 			el.setAttribute('data-ffz-emotes', 'true');

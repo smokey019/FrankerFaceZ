@@ -28,17 +28,21 @@ static_sites:
     envs:
       - key: FFZ_CDN
         scope: BUILD_TIME
-        value: https://cdn.example.com   # TODO: your DO app's domain (no trailing slash)
+        value: https://frankerfacez-fork-pizrb.ondigitalocean.app   # your DO app domain (no trailing slash)
 
-# Attach your domain. The userscript install URL is then:
-#   https://<this domain>/script/script.min.js
-domains:
-  - domain: cdn.example.com             # TODO: your client/CDN domain
-    type: PRIMARY
+# Using DO's default domain (frankerfacez-fork-pizrb.ondigitalocean.app). To use
+# your own domain, add a `domains:` block here and point FFZ_CDN at it. The
+# userscript install URL is: https://<domain>/script/script.min.js
 
-# The client is loaded cross-origin from twitch.tv (scripts use
-# crossorigin="anonymous"; fonts/JSON fetches need CORS too), so serve every
-# asset with permissive CORS. These are public, credential-less assets.
+# The client is loaded cross-origin from twitch.tv: scripts use
+# crossorigin="anonymous" AND @font-face fonts are always CORS-checked, so every
+# asset must be served with CORS or the browser blocks it (the exact error you
+# get without this). These are public, credential-less assets.
+#
+# NOTE: this `ingress` is what adds the Access-Control-Allow-Origin header. If
+# your live app was created via the dashboard, it won't have this block — add it
+# (matching your component's name) under Settings -> App Spec, or apply this
+# whole file with `doctl apps update <id> --spec .do/app.yaml`.
 ingress:
   rules:
     - match:

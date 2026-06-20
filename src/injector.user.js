@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name		FrankerFaceZ
+// @name		FrankerFaceZ-SmokeyFork
 // @namespace	FrankerFaceZ
 //
 // @version		1.59.2

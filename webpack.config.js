@@ -320,7 +320,12 @@ const config = {
 					{
 						loader: 'extract-loader',
 						options: {
-							publicPath: ''
+							// CDN layout: the CSS lives at /static/*.css and is loaded
+							// cross-origin from twitch.tv, so font/asset url()s inside it
+							// must be ABSOLUTE to the CDN host. A relative url() resolves
+							// against the stylesheet's own /static/ dir (doubling it) and
+							// 404s. Non-CDN builds keep CSS + assets co-located, so '' is fine.
+							publicPath: CDN_LAYOUT ? `${CDN_BASE}/` : ''
 						}
 					},
 					{

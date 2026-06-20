@@ -28,6 +28,9 @@ export default class ViewerCards extends Module {
 		this.current_room_id = null;
 		this.LOG_LIMIT = 200;
 
+		// Per-card MutationObservers for tokenizing the native mod logs.
+		this.mod_log_observers = new WeakMap();
+
 		this.settings.add('chat.viewer-cards.highlight-chat', {
 			default: false,
 			ui: {
@@ -89,6 +92,16 @@ export default class ViewerCards extends Module {
 				path: 'Chat > Viewer Cards >> Session Logs',
 				title: 'Hide session logs when you are a moderator of the channel.',
 				description: 'Moderators already get Twitch\'s built-in mod logs in the viewer card, so the session logs are hidden to avoid duplication.',
+				component: 'setting-check-box'
+			}
+		});
+
+		this.settings.add('chat.viewer-cards.tokenize-mod-logs', {
+			default: true,
+			ui: {
+				path: 'Chat > Viewer Cards >> Moderator Logs',
+				title: 'Render all emotes in the built-in moderator chat logs.',
+				description: 'Twitch only renders its own emotes in the moderator viewer-card logs. This adds FFZ, BetterTTV, and 7TV emotes to those messages. (Only moderators see these logs.)',
 				component: 'setting-check-box'
 			}
 		});
@@ -326,9 +339,96 @@ body .chat-room .chat-line__message:not(.chat-line--inline):nth-child(1n+0)[data
 
 	updateCard(inst) {
 		this.updateStyle(inst.props && inst.props.targetLogin);
+		this.setupModLogTokenizer(inst);
 	}
 
-	unmountCard() {
+	unmountCard(inst) {
 		this.updateStyle();
+		this.teardownModLogTokenizer(inst);
+	}
+
+	// ========================================================================
+	// Moderator Log Emotes
+	// ========================================================================
+	// Twitch only renders its own emotes in the in-card mod logs. We watch the
+	// card's DOM and re-tokenize each log line's text through FFZ so emotes from
+	// every provider show. The mod logs only exist for moderators, so this is
+	// inherently mod-only.
+
+	setupModLogTokenizer(inst) {
+		if ( ! inst || ! this.chat.context.get('chat.viewer-cards.tokenize-mod-logs') )
+			return;
+
+		if ( this.mod_log_observers.has(inst) ) {
+			this.processModLogs(inst);
+			return;
+		}
+
+		const node = this.fine.getChildNode(inst);
+		if ( ! node || ! node.querySelectorAll )
+			return;
+
+		const observer = new MutationObserver(() => this.processModLogs(inst));
+		observer.observe(node, {childList: true, subtree: true});
+		this.mod_log_observers.set(inst, {observer, node});
+		this.processModLogs(inst);
+	}
+
+	teardownModLogTokenizer(inst) {
+		const data = inst && this.mod_log_observers.get(inst);
+		if ( data ) {
+			data.observer.disconnect();
+			this.mod_log_observers.delete(inst);
+		}
+	}
+
+	processModLogs(inst) {
+		const data = this.mod_log_observers.get(inst),
+			node = (data && data.node) || this.fine.getChildNode(inst);
+		if ( ! node || ! node.querySelectorAll )
+			return;
+
+		const messages = node.querySelectorAll('.vcml-message:not([data-ffz-emotes])');
+		if ( ! messages.length )
+			return;
+
+		// Resolve the channel these logs belong to, for emote context.
+		const chat_inst = Array.from(this.parent.ChatService?.instances || [])[0],
+			room_id = chat_inst?.props?.channelID,
+			room_login = chat_inst?.props?.channelLogin;
+
+		for ( const el of messages ) {
+			el.setAttribute('data-ffz-emotes', 'true');
+			try {
+				this.tokenizeModLogMessage(el, room_id, room_login);
+			} catch(err) {
+				this.log.error('[mod-logs] failed to tokenize message', err);
+			}
+		}
+	}
+
+	tokenizeModLogMessage(el, room_id, room_login) {
+		const fragments = el.querySelectorAll('.text-fragment[data-a-target="chat-message-text"]');
+		for ( const frag of fragments ) {
+			const text = frag.textContent;
+			if ( ! text || ! text.trim() )
+				continue;
+
+			const tokens = this.chat.tokenizeMessage({
+				message: text,
+				roomID: room_id,
+				roomLogin: room_login
+			}, null);
+
+			// Only swap in our render if we actually found emotes.
+			if ( ! tokens || ! tokens.some(tok => tok && tok.type && tok.type !== 'text') )
+				continue;
+
+			const rendered = this.chat.renderTokens(tokens),
+				nodes = (Array.isArray(rendered) ? rendered : [rendered]).filter(n => n != null);
+
+			if ( nodes.length )
+				frag.replaceWith(...nodes);
+		}
 	}
 }

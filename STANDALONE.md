@@ -51,35 +51,27 @@ FFZ_CDN=https://cdn.example.com FFZ_API=https://api.example.com bun run build
 
 ## 2. The CDN serving contract (`cdn.*`, this repo)
 
-`bun run build` emits to `dist/`. Your CDN must serve these request paths
-(the client appends `?_=<cachebuster>` to some of them):
+`bun run build` emits `dist/` **already laid out for a plain static host** —
+the loader + entry bundles + `experiments.json` under `dist/script/`, and the
+hashed chunks/CSS/fonts under `dist/static/`. **Serve `dist/` at the root of
+your `cdn.*` domain** and every request below resolves directly — no rewrites,
+no manifest layer:
 
 | Request                              | Served from                          |
 |--------------------------------------|--------------------------------------|
-| `GET /script/script.min.js`          | `dist/script.min.js` (the loader; this is what the userscript install points at) |
-| `GET /script/{flavor}.js`            | the entry bundle for `avalon` / `player` / `clips` / `bridge` |
-| `GET /script/experiments.json`       | feature flags (serve `{}` is fine; 404 degrades gracefully) |
-| `GET /static/{name}.{hash}.js`       | code-split chunks (publicPath) |
-| `GET /static/{name}.{hash}.css`      | extracted CSS |
-| `GET /static/*.woff2` / `.woff` / `.ttf` | fonts |
+| `GET /script/script.min.js`          | `dist/script/script.min.js` (the loader; the userscript install points here) |
+| `GET /script/{flavor}.js`            | `dist/script/{flavor}.js` (`avalon` / `player` / `clips` / `bridge`) |
+| `GET /script/experiments.json`       | `dist/script/experiments.json` (feature flags; 404 degrades gracefully) |
+| `GET /static/{name}.{hash}.js`       | `dist/static/…` — code-split chunks (publicPath = CDN root) |
+| `GET /static/{name}.{hash}.css`      | `dist/static/…` — extracted CSS |
+| `GET /static/*.woff2` / `.woff` / `.ttf` | `dist/static/…` — fonts |
 
-> Both `/script/` and `/static/` map to the contents of `dist/`.
-
-### ⚠️ The loader → hashed-bundle mapping (the one real gotcha)
-
-The loader requests **unhashed** `/script/avalon.js`, but `bun run build`
-currently emits **content-hashed** entry bundles (`avalon.[hash].js`). A plain
-static host can't bridge that. Two ways to solve it:
-
-- **Option A — manifest-aware serving layer.** Read `dist/manifest.json`
-  (emitted by WebpackManifestPlugin) and rewrite `/script/avalon.js` → the
-  hashed file. Natural if your private repo / a small service fronts the CDN.
-- **Option B — stable entry names (recommended for a DO static site).**
-  Configure webpack to emit entry points + `experiments.json` with stable,
-  unhashed names so `/script/avalon.js` is a real file. The loader already
-  cache-busts entry bundles with `?_=<timestamp>`, so they don't need content
-  hashes; keep the code-split **chunks** hashed for caching. This is a small
-  webpack change we can make when you're ready to deploy.
+Entry bundles use **stable** names (the loader cache-busts them with
+`?_=<timestamp>`); chunks/assets keep content hashes for long-term caching. So a
+**DigitalOcean App Platform static site** with `output_dir: dist` serves the
+whole client as-is. (This `/script` + `/static` layout is applied only to the
+production userscript build — the dev server and the extension build are
+unchanged. See `CDN_LAYOUT` in `webpack.config.js`.)
 
 ### Static assets the client may fetch from the CDN (Phase 2)
 

@@ -15,3 +15,5 @@ credentials.json
 .fontello-session
 /.claude
 CLAUDE.md
+STANDALONE.md
+API_SPEC.md

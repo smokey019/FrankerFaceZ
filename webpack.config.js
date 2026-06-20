@@ -21,12 +21,30 @@ const DEV_BUILD = process.env.NODE_ENV !== 'production';
 // Is this for an extension?
 const FOR_EXTENSION = !! process.env.FFZ_EXTENSION;
 
-// Get the public path.
+// --- Distribution host (DigitalOcean) ---------------------------------------
+// Where YOUR built client is hosted: the loader (src/entry.js) and the webpack
+// code chunks load from here. Defaults to the upstream FFZ CDN, so an unset
+// build behaves like upstream; set FFZ_CDN to your own DO host to serve your
+// custom build from there. DATA + static assets still come from FFZ — the
+// runtime hosts in src/utilities/constants.ts (SERVER, API_SERVER, images) are
+// intentionally left at FFZ's defaults.
+const stripSlash = value => value.replace(/\/+$/, '');
+const CDN_BASE = stripSlash(process.env.FFZ_CDN || 'https://cdn2.frankerfacez.com');
+
+// For the production build, lay the output under /script and /static so a plain
+// static host (a DO App Platform static site) can serve dist/ as-is. The dev
+// server and the extension build are unaffected.
+const CDN_LAYOUT = ! FOR_EXTENSION && ! DEV_SERVER && ! DEV_BUILD;
+const SCRIPT_DIR = CDN_LAYOUT ? 'script/' : '';
+const STATIC_DIR = CDN_LAYOUT ? 'static/' : '';
+
+// Get the public path. With the CDN layout, publicPath is the host root and the
+// /static prefix lives in the chunk/asset filenames below.
 const FILE_PATH = DEV_SERVER
 	? 'https://localhost:8000/script/'
 	: FOR_EXTENSION
 		? ''
-		: 'https://cdn2.frankerfacez.com/static/';
+		: `${CDN_BASE}/`;
 
 
 console.log('NODE_ENV:', process.env.NODE_ENV);
@@ -34,6 +52,7 @@ console.log('FOR_EXTENSION:', FOR_EXTENSION, FOR_EXTENSION ? ` (${process.env.FF
 console.log('IS_DEV_BUILD:', DEV_BUILD);
 console.log('IS SERVE:', DEV_SERVER);
 console.log('FILE PATH:', FILE_PATH);
+console.log('FFZ_CDN (code host):', CDN_BASE);
 
 
 // Version Stuff
@@ -63,9 +82,11 @@ const COPY_PATTERNS = [
 		from: FOR_EXTENSION
 			? './src/entry_ext.js'
 			: './src/entry.js',
-		to: (DEV_SERVER || DEV_BUILD)
-			? 'script.js'
-			: 'script.min.js'
+		to: `${SCRIPT_DIR}${(DEV_SERVER || DEV_BUILD) ? 'script.js' : 'script.min.js'}`,
+		// The loader runs before the bundle and is copied verbatim (not run
+		// through esbuild), so inject the configured code host here by replacing
+		// the __FFZ_CDN__ placeholder in src/entry.js.
+		transform: content => content.toString().replaceAll('__FFZ_CDN__', CDN_BASE)
 	},
 ];
 
@@ -116,9 +137,15 @@ const config = {
 			? 'auto'
 			: FILE_PATH,
 		path: path.resolve(__dirname, 'dist'),
-		filename: (FOR_EXTENSION || DEV_SERVER)
-			? '[name].js'
-			: '[name].[contenthash:8].js',
+		// Entry bundles use stable names so the loader can request them at a
+		// fixed /script/{flavor}.js path (it cache-busts with ?_=<ts>); chunks
+		// keep content hashes. With CDN_LAYOUT they go under /script and /static.
+		filename: CDN_LAYOUT
+			? `${SCRIPT_DIR}[name].js`
+			: (FOR_EXTENSION || DEV_SERVER) ? '[name].js' : '[name].[contenthash:8].js',
+		chunkFilename: CDN_LAYOUT
+			? `${STATIC_DIR}[name].[contenthash:8].js`
+			: (FOR_EXTENSION || DEV_SERVER) ? '[name].js' : '[name].[contenthash:8].js',
 		chunkLoadingGlobal: 'ffzWebpackJsonp',
 		crossOriginLoading: 'anonymous'
 	},
@@ -209,7 +236,7 @@ const config = {
 				generator: {
 					filename: (FOR_EXTENSION || DEV_BUILD)
 						? '[name].json'
-						: '[name].[contenthash:8].json'
+						: `${STATIC_DIR}[name].[contenthash:8].json`
 				}
 			},
 			{
@@ -224,7 +251,7 @@ const config = {
 				generator: {
 					filename: (FOR_EXTENSION || DEV_BUILD)
 						? '[name].json'
-						: '[name].[contenthash:8].json'
+						: `${STATIC_DIR}[name].[contenthash:8].json`
 				}
 			},
 			{
@@ -234,7 +261,7 @@ const config = {
 					options: {
 						name: (FOR_EXTENSION || DEV_BUILD)
 							? '[name].[ext]'
-							: '[name].[contenthash:8].[ext]'
+							: `${STATIC_DIR}[name].[contenthash:8].[ext]`
 					}
 				}]
 			},
@@ -263,7 +290,7 @@ const config = {
 						options: {
 							name: (FOR_EXTENSION || DEV_BUILD)
 								? '[name].css'
-								: '[name].[contenthash:8].css'
+								: `${STATIC_DIR}[name].[contenthash:8].css`
 						}
 					},
 					{

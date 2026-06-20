@@ -15,7 +15,10 @@
 
 	const DEBUG = localStorage.ffzDebugMode == 'true' && document.body.classList.contains('ffz-dev'),
 		HOST = location.hostname,
-		SERVER = DEBUG ? '//localhost:8000' : '//cdn2.frankerfacez.com',
+		// The non-debug code host is injected at build time from the FFZ_CDN env
+		// var via the CopyPlugin transform in webpack.config.js (defaults to the
+		// FFZ CDN). Set FFZ_CDN to your own DigitalOcean host to serve your build.
+		SERVER = DEBUG ? '//localhost:8000' : '__FFZ_CDN__',
 		script = document.createElement('script');
 
 	let FLAVOR =

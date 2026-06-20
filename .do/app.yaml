@@ -1,0 +1,56 @@
+# ===========================================================================
+# DigitalOcean App Platform spec — custom FrankerFaceZ client (this repo)
+# ===========================================================================
+# Hosts YOUR custom build. The client still pulls DATA + static assets from
+# FFZ's own infra (api / cdn / cdn2.frankerfacez.com) — only the code bundle is
+# served from here. Validate against the current app spec:
+#   https://docs.digitalocean.com/products/app-platform/reference/app-spec/
+# Replace the TODO domains before deploying.
+# ===========================================================================
+
+name: ffz-client
+region: nyc
+
+static_sites:
+  - name: client
+    github:
+      repo: smokey019/FrankerFaceZ
+      branch: master
+      deploy_on_push: true
+
+    # bun is detected from packageManager (bun@1.3.10) / bun.lock.
+    build_command: bun install --frozen-lockfile && bun run build
+    output_dir: dist
+
+    # Build-time: where this app is served (your code host). It's baked into the
+    # loader (src/entry.js) and the webpack publicPath. Set it to this app's
+    # domain so the loader + chunks resolve to your DO host.
+    envs:
+      - key: FFZ_CDN
+        scope: BUILD_TIME
+        value: https://cdn.example.com   # TODO: your DO app's domain (no trailing slash)
+
+# Attach your domain. The userscript install URL is then:
+#   https://<this domain>/script/script.min.js
+domains:
+  - domain: cdn.example.com             # TODO: your client/CDN domain
+    type: PRIMARY
+
+# The client is loaded cross-origin from twitch.tv (scripts use
+# crossorigin="anonymous"; fonts/JSON fetches need CORS too), so serve every
+# asset with permissive CORS. These are public, credential-less assets.
+ingress:
+  rules:
+    - match:
+        path:
+          prefix: /
+      component:
+        name: client
+      cors:
+        allow_origins:
+          - regex: "^https://([a-z0-9-]+\\.)?twitch\\.tv$"
+        allow_methods:
+          - GET
+          - HEAD
+        allow_headers:
+          - "*"

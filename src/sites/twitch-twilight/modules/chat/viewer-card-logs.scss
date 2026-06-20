@@ -3,6 +3,8 @@
 	flex-direction: column;
 	min-height: 0;
 	border-top: 1px solid var(--color-border-base, rgba(128,128,128,.24));
+	background-color: var(--color-background-base, #18181b);
+	color: var(--color-text-base, inherit);
 	font-size: 1.2rem;
 
 	&__toggle {

@@ -114,6 +114,16 @@ const COPY_PATTERNS = [
 	},
 ];
 
+// The userscript injector (the installable .user.js). Served alongside the
+// loader so the install + auto-update URL live on your own host. Same
+// __FFZ_CDN__ -> host substitution as the loader. Not needed for the extension.
+if ( ! FOR_EXTENSION )
+	COPY_PATTERNS.push({
+		from: './src/injector.user.js',
+		to: `${SCRIPT_DIR}ffz_injector.user.js`,
+		transform: content => content.toString().replaceAll('__FFZ_CDN__', CDN_BASE)
+	});
+
 const TARGET = 'es2020';
 
 /** @type {import('webpack').Configuration} */
@@ -178,7 +188,10 @@ const config = {
 		minimizer: [
 			new EsbuildPlugin({
 				target: TARGET,
-				keepNames: true
+				keepNames: true,
+				// Don't minify the copied userscript injector — minification strips
+				// its ==UserScript== metadata block and breaks installation.
+				exclude: /\.user\.js$/
 			})
 		],
 		splitChunks: {
@@ -216,7 +229,10 @@ const config = {
 				__extension__: FOR_EXTENSION
 					? JSON.stringify(process.env.FFZ_EXTENSION)
 					: JSON.stringify(false)
-			}
+			},
+			// Leave the copied userscript injector alone so its ==UserScript==
+			// metadata comment survives (esbuild would otherwise strip comments).
+			exclude: /\.user\.js$/
 		}),
 		new WebpackManifestPlugin({
 			publicPath: ''

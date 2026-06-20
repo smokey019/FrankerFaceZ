@@ -83,6 +83,16 @@ export default class ViewerCards extends Module {
 			}
 		});
 
+		this.settings.add('chat.viewer-cards.session-logs.hide-if-mod', {
+			default: true,
+			ui: {
+				path: 'Chat > Viewer Cards >> Session Logs',
+				title: 'Hide session logs when you are a moderator of the channel.',
+				description: 'Moderators already get Twitch\'s built-in mod logs in the viewer card, so the session logs are hidden to avoid duplication.',
+				component: 'setting-check-box'
+			}
+		});
+
 		this.ViewerCard = this.fine.define(
 			'chat-viewer-card',
 			n => n.props?.targetLogin && n.props?.hideViewerCard
@@ -257,6 +267,10 @@ export default class ViewerCards extends Module {
 				const out = old_render.call(this);
 				try {
 					if ( ! out || ! React.isValidElement(out) || ! t.chat.context.get('chat.viewer-cards.session-logs') )
+						return out;
+
+					// Moderators already have Twitch's built-in mod logs here.
+					if ( t.chat.context.get('chat.viewer-cards.session-logs.hide-if-mod') && t.site.getUser()?.moderator )
 						return out;
 
 					const login = (this.props && this.props.targetLogin || '').toLowerCase();

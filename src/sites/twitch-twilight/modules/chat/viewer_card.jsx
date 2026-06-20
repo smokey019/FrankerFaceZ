@@ -418,14 +418,14 @@ body .chat-room .chat-line__message:not(.chat-line--inline):nth-child(1n+0)[data
 			if ( ! text || ! text.trim() )
 				continue;
 
+			// A user object is required (the emote tokenizer reads user.id/login);
+			// channel + global emotes resolve from the room, so a null user is fine.
 			const tokens = this.chat.tokenizeMessage({
 				message: text,
+				user: {id: null, login: null},
 				roomID: room_id,
 				roomLogin: room_login
 			}, null);
-
-			// eslint-disable-next-line no-console
-			console.log('[FFZ ModLogs] text:', JSON.stringify(text), '→', tokens && tokens.length, 'tokens; types:', tokens && tokens.map(tok => tok && tok.type), '; emotes:', tokens && tokens.filter(tok => tok && tok.type && tok.type !== 'text').length);
 
 			// Only swap in our render if we actually found emotes.
 			if ( ! tokens || ! tokens.some(tok => tok && tok.type && tok.type !== 'text') )

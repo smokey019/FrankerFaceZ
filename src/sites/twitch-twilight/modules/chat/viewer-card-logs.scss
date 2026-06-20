@@ -97,3 +97,15 @@
 		padding: .5rem 0;
 	}
 }
+
+// Emotes we inject into Twitch's native moderator logs. The global emote margin
+// (-.5rem) is tuned for the chat line-height and overlaps in the tighter mod-log
+// rows, so use FFZ's lighter "padded" spacing there — while leaving stacked
+// (modified) emotes at their normal offset.
+.vcml-message .chat-line__message--emote {
+	margin: -1px 0 0;
+}
+
+.vcml-message .modified-emote > .chat-line__message--emote {
+	margin: 0;
+}

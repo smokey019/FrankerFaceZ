@@ -398,8 +398,6 @@ body .chat-room .chat-line__message:not(.chat-line--inline):nth-child(1n+0)[data
 		const chat_inst = Array.from(this.parent.ChatService?.instances || [])[0],
 			room_id = chat_inst?.props?.channelID,
 			room_login = chat_inst?.props?.channelLogin;
-		// eslint-disable-next-line no-console
-		console.log('[FFZ ModLogs] processing', messages.length, 'messages; room:', room_login, room_id);
 
 		for ( const el of messages ) {
 			el.setAttribute('data-ffz-emotes', 'true');

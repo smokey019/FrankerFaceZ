@@ -5,14 +5,15 @@
 	"description": "FrankerFaceZ is a Twitch enhancement suite.",
 	"private": true,
 	"license": "Apache-2.0",
+	"packageManager": "bun@1.3.10",
 	"scripts": {
-		"start": "pnpm dev",
+		"start": "bun run dev",
 		"eslint": "eslint \"src/**/*.{js,jsx,vue}\"",
 		"clean": "rimraf dist",
 		"dev": "cross-env NODE_ENV=development webpack serve",
 		"dev:prod": "cross-env NODE_ENV=production webpack serve",
 		"dev:ext": "cross-env NODE_ENV=development FFZ_EXTENSION=true webpack serve",
-		"build": "pnpm build:prod",
+		"build": "bun run build:prod",
 		"build:ext": "cross-env NODE_ENV=production FFZ_EXTENSION=true webpack build",
 		"build:stats": "cross-env NODE_ENV=production webpack build --json > stats.json",
 		"build:prod": "cross-env NODE_ENV=production webpack build",
@@ -20,9 +21,9 @@
 		"build:types": "cross-env tsc --declaration --emitDeclarationOnly --outDir typedist && node bin/build_types",
 		"abuild:types": "node bin/build_types",
 		"build:docs": "cross-env typedoc --options typedoc.json",
-		"font": "pnpm font:edit",
+		"font": "bun run font:edit",
 		"font:edit": "fontello-cli --cli-config fontello.client.json edit",
-		"font:save": "fontello-cli --cli-config fontello.client.json save && pnpm font:update",
+		"font:save": "fontello-cli --cli-config fontello.client.json save && bun run font:update",
 		"font:update": "node bin/update_fonts"
 	},
 	"devDependencies": {
@@ -99,20 +100,14 @@
 		"vue-observe-visibility": "^1.0.0",
 		"vuedraggable": "^2.24.3"
 	},
-	"pnpm": {
-		"overrides": {
-			"ansi-regex@>2.1.1 <5.0.1": ">=5.0.1",
-			"chalk@<4": ">=4 <5",
-			"set-value@<4.0.1": ">=4.0.1",
-			"glob-parent@<5.1.2": ">=5.1.2"
-		},
-		"onlyBuiltDependencies": [
-			"esbuild",
-			"libxmljs2"
-		],
-		"ignoredBuiltDependencies": [
-			"@parcel/watcher",
-			"core-js"
-		]
-	}
+	"overrides": {
+		"ansi-regex": ">=5.0.1 <6",
+		"chalk": ">=4 <5",
+		"set-value": ">=4.0.1",
+		"glob-parent": ">=5.1.2"
+	},
+	"trustedDependencies": [
+		"esbuild",
+		"libxmljs2"
+	]
 }

@@ -1,5 +1,5 @@
 'use strict';
-// This is a generated file. To update it, please run: pnpm font:update
+// This is a generated file. To update it, please run: bun run font:update
 /* eslint quotes: 0 */
 
 /**

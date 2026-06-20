@@ -6,7 +6,7 @@
 // ============================================================================
 
 import Module from 'utilities/module';
-import {DEBUG, WS_CLUSTERS} from 'utilities/constants';
+import {DEBUG, API_SERVER, WS_CLUSTERS} from 'utilities/constants';
 import { on } from 'utilities/dom';
 
 
@@ -37,19 +37,19 @@ export default class SocketClient extends Module {
 		});
 
 		this.settings.add('auth.mode', {
-			default: 'chat',
+			default: 'oauth',
 
 			ui: {
 				path: 'Data Management > Authentication >> General',
 				title: 'Authentication Provider',
-				description: 'Which method should the FrankerFaceZ client use to authenticate against the FFZ servers when necessary?',
+				description: 'How the FrankerFaceZ client should authenticate with the FFZ API when needed (for actions like reporting or managing emotes).',
 				component: 'setting-select-box',
 				force_seen: true,
 
 				data: [
 					{
-						value: 'chat',
-						title: 'Twitch Chat'
+						value: 'oauth',
+						title: 'Sign in with Twitch'
 					},
 					{
 						value: false,
@@ -162,117 +162,96 @@ export default class SocketClient extends Module {
 	getAPIToken() {
 		const mode = this.settings.get('auth.mode');
 
-		if ( mode === 'chat' )
-			return this._getAPIToken_Chat();
+		if ( mode === 'oauth' || mode === 'chat' )
+			return this._getAPIToken_OAuth();
 
 		return Promise.reject(new Error('The user has disabled authentication.'));
 	}
 
-	_getAPIToken_Chat() {
-		if ( this._cached_token ) {
-			if ( this._cached_token.expires > (Date.now() + 15000) )
-				return Promise.resolve(this._cached_token);
-		}
+	_getAPIToken_OAuth() {
+		// Return a still-valid cached token if we have one. The token is kept in
+		// memory only (not persisted) to limit its exposure to other scripts on
+		// the page; it's re-fetched after a reload when next needed.
+		if ( this._cached_token && this._cached_token.expires > (Date.now() + 15000) )
+			return Promise.resolve(this._cached_token);
 
-		if ( this._token_waiters )
-			return new Promise((s, f) => this._token_waiters.push([s, f]));
+		// De-duplicate concurrent token requests.
+		if ( this._token_promise )
+			return this._token_promise;
 
-		this._token_waiters = [];
+		return this._token_promise = new Promise((resolve, reject) => {
+			let settled = false, timer = null, closeCheck = null, popup = null;
 
-		return new Promise((s, f) => {
-			this._token_waiters.push([s, f]);
+			// We only accept the token from the API server's own origin, from the
+			// popup we opened, carrying the one-time nonce we generated here.
+			const api_origin = new URL(API_SERVER).origin;
+			const nonce = (window.crypto && crypto.randomUUID)
+				? crypto.randomUUID()
+				: `${Date.now()}.${Math.random()}`;
 
-			let done = false, timer = null;
+			const cleanup = () => {
+				window.removeEventListener('message', onMessage);
+				if ( timer ) clearTimeout(timer);
+				if ( closeCheck ) clearInterval(closeCheck);
+				if ( popup && ! popup.closed ) {
+					try { popup.close(); } catch(err) { /* no-op */ }
+				}
+				this._token_promise = null;
+			};
 
 			const fail = err => {
-				if ( done )
-					return;
-
-				clearTimeout(timer);
-				done = true;
+				if ( settled ) return;
+				settled = true;
+				cleanup();
 				this.log.error('Unable to get API token.', err);
-				const waiters = this._token_waiters;
-				this._token_waiters = null;
+				reject(err);
+			};
 
-				for(const pair of waiters)
-					pair[1](err);
-			}
+			const succeed = token => {
+				if ( settled ) return;
+				settled = true;
+				cleanup();
+				resolve(token);
+			};
 
-			const user = this.resolve('site')?.getUser?.();
-			if ( ! user || ! user.id )
-				return fail(new Error('Unable to get current user or not logged in.'));
-
-			const es = new EventSource(`https://api.frankerfacez.com/auth/ext_verify/${user.id}`);
-
-			on(es, 'challenge', event => {
-				const conn = this.resolve('site.chat')?.ChatService?.first?.client?.connection;
-				if ( conn && conn.send )
-					conn.send(`PRIVMSG #frankerfacezauthorizer :AUTH ${event.data}`);
-			});
-
-			on(es, 'token', event => {
-				if ( done )
+			const onMessage = event => {
+				// Only accept the token from the API origin, sent by the popup we
+				// opened, and carrying our nonce.
+				if ( event.origin !== api_origin || (popup && event.source !== popup) )
 					return;
 
-				clearTimeout(timer);
-
-				let token = null;
-				try {
-					token = JSON.parse(event.data);
-				} catch(err) {
-					fail(err);
+				const data = event.data;
+				if ( ! data || data.type !== 'ffz-auth-token' || ! data.token || data.nonce !== nonce )
 					return;
-				}
 
-				if ( ! token || ! token.token ) {
-					fail(new Error('Received empty token from server.'));
-					return;
-				}
+				const token = {
+					token: data.token,
+					expires: typeof data.expires === 'number'
+						? data.expires
+						: (Date.now() + 3600000)
+				};
 
-				token.expires = (new Date(token.expires)).getTime();
 				this._cached_token = token;
+				succeed(token);
+			};
 
-				done = true;
+			window.addEventListener('message', onMessage);
 
-				const waiters = this._token_waiters;
-				this._token_waiters = null;
+			const url = `${API_SERVER}/auth/login?origin=${encodeURIComponent(location.origin)}&nonce=${encodeURIComponent(nonce)}`;
+			popup = window.open(url, 'ffz_auth', 'width=520,height=720,menubar=no,toolbar=no,location=yes');
 
-				for(const pair of waiters)
-					pair[0](token);
-			});
+			if ( ! popup )
+				return fail(new Error('The sign-in popup was blocked. Please allow popups and try again.'));
 
-			on(es, 'error', err => {
-				fail(err);
-			});
-
-			on(es, 'close', () => {
-				es.close();
-				if ( ! done )
-					fail(new Error('Connection closed unexpectedly.'));
-			});
+			// Fail if the user closes the popup without finishing.
+			closeCheck = setInterval(() => {
+				if ( popup.closed && ! settled )
+					fail(new Error('Sign-in was cancelled.'));
+			}, 500);
 
 			timer = setTimeout(() => {
-				fail(new Error('timeout'));
-			}, 5000);
-
-			/*this.call('get_api_token').then(token => {
-				token.expires = (new Date(token.expires)).getTime();
-				this._cached_token = token;
-
-				const waiters = this._token_waiters;
-				this._token_waiters = null;
-
-				for(const pair of waiters)
-					pair[0](token);
-
-			}).catch(err => {
-				this.log.error('Unable to get API token.', err);
-				const waiters = this._token_waiters;
-				this._token_waiters = null;
-
-				for(const pair of waiters)
-					pair[1](err);
-			});*/
+				fail(new Error('Sign-in timed out.'));
+			}, 120000);
 		});
 	}
 

@@ -20,6 +20,7 @@ import SettingsMenu from './settings_menu';
 import EmoteMenu from './emote_menu';
 import Input from './input';
 import ViewerCards from './viewer_card';
+import ModNotices from './mod_notices';
 import { isHighlightedReward, isMessageEffect } from './points';
 
 
@@ -230,6 +231,7 @@ export default class ChatHook extends Module {
 		this.inject(EmoteMenu);
 		this.inject(Input);
 		this.inject(ViewerCards);
+		this.inject(ModNotices);
 
 		this.ChatLeaderboard = this.fine.define(
 			'chat-leaderboard',

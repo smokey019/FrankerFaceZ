@@ -20,7 +20,7 @@ region: nyc
 static_sites:
   - name: client
     github:
-      repo: YOUR_ORG/YOUR_FORK          # TODO: your fork of this client repo
+      repo: smokey019/FrankerFaceZ
       branch: master
       deploy_on_push: true
 
@@ -44,7 +44,13 @@ static_sites:
       - key: FFZ_STAGING_CDN
         scope: BUILD_TIME
         value: https://cdn.example.com
+      - key: FFZ_IMAGE_CDN
+        scope: BUILD_TIME
+        value: https://cdn.example.com
 
+# The output (dist/) is laid out under /script and /static, so this static site
+# serves the client as-is. The userscript install points at:
+#   https://<your cdn domain>/script/script.min.js
 # Attach the CDN subdomain to this app.
 domains:
   - domain: cdn.example.com             # TODO: your client/CDN domain

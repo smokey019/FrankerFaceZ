@@ -36,12 +36,22 @@ const STAGING_CDN_BASE = stripSlash(process.env.FFZ_STAGING_CDN || CDN_BASE);
 const IMAGE_CDN = stripSlash(process.env.FFZ_IMAGE_CDN || 'https://cdn.frankerfacez.com');
 const DEV_PROXY = stripSlash(process.env.FFZ_DEV_PROXY || CDN_BASE);
 
-// Get the public path.
+// For the production userscript build, lay the output out under /script and
+// /static so a plain static host (e.g. a DigitalOcean App Platform static site)
+// can serve dist/ as-is: the client loads {FFZ_CDN}/script/{flavor}.js and its
+// chunks/assets from {FFZ_CDN}/static/. The dev server and extension build are
+// unaffected.
+const CDN_LAYOUT = ! FOR_EXTENSION && ! DEV_SERVER && ! DEV_BUILD;
+const SCRIPT_DIR = CDN_LAYOUT ? 'script/' : '';
+const STATIC_DIR = CDN_LAYOUT ? 'static/' : '';
+
+// Get the public path. With the CDN layout, publicPath is the CDN root and the
+// /static prefix lives in the chunk/asset filenames below.
 const FILE_PATH = DEV_SERVER
 	? 'https://localhost:8000/script/'
 	: FOR_EXTENSION
 		? ''
-		: `${CDN_BASE}/static/`;
+		: `${CDN_BASE}/`;
 
 
 console.log('NODE_ENV:', process.env.NODE_ENV);
@@ -81,9 +91,7 @@ const COPY_PATTERNS = [
 		from: FOR_EXTENSION
 			? './src/entry_ext.js'
 			: './src/entry.js',
-		to: (DEV_SERVER || DEV_BUILD)
-			? 'script.js'
-			: 'script.min.js',
+		to: `${SCRIPT_DIR}${(DEV_SERVER || DEV_BUILD) ? 'script.js' : 'script.min.js'}`,
 		// The loader runs before the bundle and can't import constants, and it's
 		// copied verbatim (not run through esbuild), so inject the configured CDN
 		// base here by replacing the __FFZ_CDN__ placeholder in src/entry.js.
@@ -93,7 +101,7 @@ const COPY_PATTERNS = [
 		// Served at {FFZ_CDN}/script/experiments.json, fetched at runtime by
 		// src/experiments.ts. Absence degrades to all-experiments-off.
 		from: './src/experiments.json',
-		to: 'experiments.json'
+		to: `${SCRIPT_DIR}experiments.json`
 	},
 ];
 
@@ -147,10 +155,10 @@ const config = {
 		// Entry bundles use stable names so the loader can request them at a
 		// fixed /script/{flavor}.js path (the loader cache-busts with
 		// ?_=<timestamp>). Code-split chunks keep content hashes for caching.
-		filename: '[name].js',
+		filename: `${SCRIPT_DIR}[name].js`,
 		chunkFilename: (FOR_EXTENSION || DEV_SERVER)
 			? '[name].js'
-			: '[name].[contenthash:8].js',
+			: `${STATIC_DIR}[name].[contenthash:8].js`,
 		chunkLoadingGlobal: 'ffzWebpackJsonp',
 		crossOriginLoading: 'anonymous'
 	},
@@ -246,7 +254,7 @@ const config = {
 				generator: {
 					filename: (FOR_EXTENSION || DEV_BUILD)
 						? '[name].json'
-						: '[name].[contenthash:8].json'
+						: `${STATIC_DIR}[name].[contenthash:8].json`
 				}
 			},
 			{
@@ -261,7 +269,7 @@ const config = {
 				generator: {
 					filename: (FOR_EXTENSION || DEV_BUILD)
 						? '[name].json'
-						: '[name].[contenthash:8].json'
+						: `${STATIC_DIR}[name].[contenthash:8].json`
 				}
 			},
 			{
@@ -271,7 +279,7 @@ const config = {
 					options: {
 						name: (FOR_EXTENSION || DEV_BUILD)
 							? '[name].[ext]'
-							: '[name].[contenthash:8].[ext]'
+							: `${STATIC_DIR}[name].[contenthash:8].[ext]`
 					}
 				}]
 			},
@@ -300,7 +308,7 @@ const config = {
 						options: {
 							name: (FOR_EXTENSION || DEV_BUILD)
 								? '[name].css'
-								: '[name].[contenthash:8].css'
+								: `${STATIC_DIR}[name].[contenthash:8].css`
 						}
 					},
 					{

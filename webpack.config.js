@@ -2,7 +2,7 @@
 
 const path = require('path');
 const semver = require('semver');
-const {exec, execSync} = require('child_process');
+const {exec, execSync, execFileSync} = require('child_process');
 
 const { CycloneDxWebpackPlugin } = require('@cyclonedx/webpack-plugin');
 const { VueLoaderPlugin } = require('vue-loader');
@@ -62,6 +62,30 @@ const commit_hash = DEV_SERVER
 	: process.env.CLIENT_COMMIT?.length > 0
 		? process.env.CLIENT_COMMIT
 		: execSync('git rev-parse HEAD').toString().trim();
+
+// Build number: how many commits this fork is ahead of the upstream FFZ release
+// it's based on. The base is the most recent commit whose message is a version
+// number (FFZ tags releases like "4.81.0"), so the count resets to 1 each time
+// you sync a new FFZ version. It's surfaced as the 4th version component, e.g.
+// 4.81.0.5 (see src/main.ts). Override with the FFZ_BUILD env var if you want
+// to set it explicitly. (Requires full git history — true for a normal clone.)
+const build_number = DEV_SERVER
+	? null
+	: process.env.FFZ_BUILD?.length > 0
+		? process.env.FFZ_BUILD
+		: (() => {
+			try {
+				const base = execFileSync('git', ['log', '-1', '-E', '--grep=^[0-9]+\\.[0-9]+\\.[0-9]+', '--format=%H']).toString().trim();
+				if ( ! base )
+					return null;
+				const count = execFileSync('git', ['rev-list', '--count', `${base}..HEAD`]).toString().trim();
+				return (count && count !== '0') ? count : null;
+			} catch {
+				return null;
+			}
+		})();
+
+console.log('BUILD NUMBER:', build_number);
 
 
 // The Config
@@ -187,7 +211,7 @@ const config = {
 				__version_minor__: JSON.stringify(VERSION.minor),
 				__version_patch__: JSON.stringify(VERSION.patch),
 				__version_prerelease__: JSON.stringify(VERSION.prerelease),
-				__version_build__: JSON.stringify(process.env.FFZ_BUILD || null),
+				__version_build__: JSON.stringify(build_number),
 				__git_commit__: JSON.stringify(commit_hash),
 				__extension__: FOR_EXTENSION
 					? JSON.stringify(process.env.FFZ_EXTENSION)

@@ -5,7 +5,7 @@
 // ============================================================================
 
 import {Color, ColorAdjuster} from 'utilities/color';
-import {get, has, make_enum, shallow_object_equals, set_equals, deep_equals, glob_to_regex, escape_regex, generateUUID} from 'utilities/object';
+import {get, has, sleep, make_enum, shallow_object_equals, set_equals, deep_equals, glob_to_regex, escape_regex, generateUUID} from 'utilities/object';
 import {WEBKIT_CSS as WEBKIT} from 'utilities/constants';
 
 import {useFont} from 'utilities/fonts';
@@ -707,6 +707,7 @@ export default class ChatHook extends Module {
 			ui: {
 				path: 'Chat > Drops >> Behavior',
 				title: 'Automatically claim drops.',
+				description: 'When enabled, drops will be automatically claimed the next time you complete one. Drops that are already available will not be claimed until a new one is earned.',
 				component: 'setting-check-box',
 			}
 		});
@@ -794,6 +795,16 @@ export default class ChatHook extends Module {
 				path: 'Chat > Appearance >> Community',
 				title: 'Display Leaderboard',
 				description: 'The leaderboard shows the top cheerers and sub gifters in a channel.\n\nBy default due to a previous implementation, this inherits its value from [Chat > Bits and Cheering > Display Bits](~chat.bits_and_cheering).',
+				component: 'setting-check-box'
+			}
+		});
+
+		this.settings.add('chat.bits.show-pinned-progression', {
+			default: true,
+			ui: {
+				path: 'Chat > Appearance >> Community',
+				title: 'Display Gift Badge Progression',
+				description: 'Show the gift badge progression at the top of chat.',
 				component: 'setting-check-box'
 			}
 		});
@@ -942,6 +953,22 @@ export default class ChatHook extends Module {
 					{value: 2, title: '3D Line (2px Groove)'},
 					{value: 3, title: '3D Line (2px Groove Inset)'},
 					{value: 4, title: 'Wide Line (2px Solid)'}
+				]
+			}
+		});
+
+		this.settings.add('chat.lines.first-time-chatter', {
+			default: 1,
+			ui: {
+				sort: 2,
+				path: 'Chat > Appearance >> Chat Lines',
+				title: 'First Time Chatter',
+				description: 'Display a users first time messages in chat.',
+				component: 'setting-select-box',
+				data: [
+					{ value: 0, title: 'Disabled' },
+					{ value: 1, title: 'Enabled' },
+					{ value: 2, title: 'Without background' }
 				]
 			}
 		});
@@ -1287,9 +1314,6 @@ export default class ChatHook extends Module {
 
 		this.chat.context.getChanges('chat.input.show-highlight', val =>
 			this.css_tweaks.toggleHide('ci-highlight-settings', !val));
-
-		this.chat.context.getChanges('chat.input.show-shield', val =>
-			this.css_tweaks.toggleHide('ci-shield-mode', ! val));
 
 		this.chat.context.getChanges('chat.lines.padding', val =>
 			this.css_tweaks.toggle('chat-padding', val));
@@ -1835,6 +1859,18 @@ export default class ChatHook extends Module {
 
 			this.insertChannelPointMessage(message);
 		});
+
+		this.dropClaimHandler = e => {
+			let message;
+			try { message = JSON.parse(e.detail); } catch (_) { return; }
+
+			if ( message?.type !== 'create-notification' ) return;
+			if ( message?.data?.notification?.type !== 'user_drop_reward_reminder_notification' ) return;
+
+			this.autoClaimDrop();
+		};
+
+		window.__twitch_pubsub_events?.addEventListener('notification', this.dropClaimHandler);
 	}
 
 	insertChannelPointMessage(msg) {
@@ -1953,10 +1989,6 @@ export default class ChatHook extends Module {
 			inst._ffz_pinned = true;
 			inst.pin();
 		}
-
-		// Auto-claim drops
-		if ( type === 'drop' )
-			this.autoClickDrop(inst);
 	}
 
 	updateInlineCallouts() {
@@ -1996,45 +2028,62 @@ export default class ChatHook extends Module {
 					onPin();
 			}
 		}
-
-		// Auto-claim drops
-		if ( type === 'drop' )
-			this.autoClickDrop(inst);
 	}
 
 
-	autoClickDrop(inst) {
-		const event = inst.props?.event?.callout?.contextMenuProps?.event ?? inst.props?.event,
-			type = event?.type;
-
-		if ( type !== 'drop' || inst._ffz_clicking || ! this.chat.context.get("chat.drops.auto-rewards") )
+	async autoClaimDrop() {
+		if ( ! this.chat.context.get('chat.drops.auto-rewards') )
 			return;
 
-		//console.warn('autoClickDrop', event, inst);
-		inst._ffz_clicking = true;
+		const apollo = this.resolve('site.apollo');
+		if ( ! apollo )
+			return;
 
-		// Wait for the button to be added to the DOM.
-		const waiter = this.resolve('site').awaitElement(
-			'button[data-a-target="chat-private-callout__primary-button"]',
-			this.fine.getHostNode(inst),
-			10000
-		);
+		let result;
+		try {
+			result = await apollo.client.query({
+				query: await import(/* webpackChunkName: 'queries' */ '../../../../utilities/data/drops-get.gql'),
+				fetchPolicy: 'network-only'
+			});
+		} catch (err) {
+			this.log.error('Error fetching drops inventory:', err);
+			return;
+		}
 
-		waiter.then(btn => {
-			inst._ffz_clicking = false;
+		const campaigns = result?.data?.currentUser?.inventory?.dropCampaignsInProgress;
+		if ( ! campaigns?.length )
+			return;
 
-			// Check AGAIN because time has passed.
-			const event = inst.props?.event?.callout?.contextMenuProps?.event ?? inst.props?.event,
-				type = event?.type;
+		for ( const campaign of campaigns ) {
+			if ( campaign.status === 'EXPIRED' || !campaign.timeBasedDrops )
+				continue;
 
-			if ( type !== 'drop' || ! this.chat.context.get("chat.drops.auto-rewards") )
-				return;
+			for ( const drop of campaign.timeBasedDrops ) {
+				const self = drop.self;
+				if ( ! self || self.isClaimed || self.dropInstanceID == null || !self.hasPreconditionsMet )
+					continue;
 
-			btn.click();
+				this.log.info(`Claiming: "${drop.name}" from "${campaign.name}"`);
 
-		}).catch(() => {
-			inst._ffz_clicking = false;
-		});
+				try {
+					const claimResult = await apollo.client.mutate({
+						mutation: await import(/* webpackChunkName: 'queries' */ '../../../../utilities/mutations/drops-claim.gql'),
+						variables: { input: { dropInstanceID: self.dropInstanceID } }
+					});
+
+					const status = claimResult?.data?.claimDropRewards?.status;
+					if ( status === 'ELIGIBLE_FOR_ALL' || status === 'DROP_INSTANCE_ALREADY_CLAIMED' )
+						this.log.info(`Successfully claimed: "${drop.name}"`);
+					else
+						this.log.warn(`Unexpected claim status for "${drop.name}":`, status);
+
+				} catch (err) {
+					this.log.error(`Error claiming "${drop.name}":`, err);
+				}
+
+				await sleep(3000);
+			}
+		}
 	}
 
 
@@ -2264,6 +2313,22 @@ export default class ChatHook extends Module {
 
 						if ( blocked_types.has(types[msg.type]) )
 							return;
+
+						if ( msg.type === types.Shoutout ) {
+							msg.type = types.Message;
+							msg.ffz_type = 'shoutout';
+							msg.shoutout_login = msg.targetChannelLogin;
+							msg.shoutout_display = msg.targetChannelDisplayName;
+							msg.timestamp = msg.timestamp || Date.now();
+							msg.ffz_no_actions = true;
+							msg.message = '';
+							msg.messageBody = '';
+							msg.messageParts = [];
+							msg.bits = 0;
+							msg.badges = {};
+							msg.badgeDynamicData = {};
+							msg.user = {};
+						}
 
 						// Hide messages related to Combos when they're hidden.
 						if ( (msg.type === types.OneTapBreakpointAchieved || msg.type === types.OneTapGiftRedeemed || msg.type === types.OneTapStreakExpired || msg.type === types.OneTapStreakStarted) && !t.chat.context.get('layout.combos') )
@@ -2948,10 +3013,102 @@ export default class ChatHook extends Module {
 				}
 
 				const old_announce = this.onAnnouncementEvent;
-				this.onAnnouncementEvent = function(e) {
-					//console.log('announcement', e);
-					return old_announce.call(this, e);
-				}
+				this.onAnnouncementEvent = function (e) {
+					try {
+						if ( t.chat.context.get('chat.filtering.blocked-types').has('AnnouncementMessage') )
+							return;
+						if ( t.disable_handling )
+							return old_announce.call(i, e);
+
+						const out = i.convertMessage(e);
+						out.ffz_type = 'announcement';
+						out.sharedChat = e.sharedChat;
+						out.announcement_color = e.color;
+
+						return i.postMessageToCurrentChannel(e, out);
+
+					} catch (err) {
+						t.log.capture(err, { extra: e });
+						return old_announce.call(i, e);
+					}
+				};
+
+				const old_viewer_milestone = this.onViewerMilestoneEvent;
+				this.onViewerMilestoneEvent = function (e) {
+					try {
+						if ( t.chat.context.get('chat.filtering.blocked-types').has('ViewerMilestone') )
+							return;
+						if ( t.disable_handling )
+							return old_viewer_milestone.call(i, e);
+
+						const inner = e.message;
+						const out = inner
+							? i.convertMessage({ message: inner })
+							: {
+								message: '',
+								messageBody: '',
+								messageParts: [],
+								bits: 0,
+								user: {},
+								badges: {},
+								badgeDynamicData: {}
+							};
+
+						out.ffz_type = 'watch_streak';
+						out.sharedChat = e.sharedChat;
+						out.watch_streak = e.watchStreak;
+						out.copo_reward = e.copoReward;
+						if ( ! out.message )
+							out.ffz_no_actions = true;
+
+						return i.postMessageToCurrentChannel(e, out);
+
+					} catch (err) {
+						t.log.capture(err, { extra: e });
+						return old_viewer_milestone.call(i, e);
+					}
+				};
+
+				const old_raid = this.onRaidEvent;
+				this.onRaidEvent = function (e) {
+					try {
+						if ( t.chat.context.get('chat.filtering.blocked-types').has('Raid') )
+							return;
+						if ( t.disable_handling )
+							return old_raid.call(i, e);
+
+						const out = {
+							id: e.id || `raid-${Date.now()}`,
+							type: t.chat_types.Message,
+							ffz_type: 'raid_notice',
+							ffz_no_actions: false,
+							sharedChat: e.sharedChat,
+							raid_viewer_count: parseInt(e.params.viewerCount, 10) || 0,
+							timestamp: Date.now(),
+							message: '',
+							messageBody: '',
+							messageParts: [],
+							bits: 0,
+							user: {
+								userID: e.params.userID,
+								userLogin: e.params.login,
+								userDisplayName: e.params.displayName,
+								id: e.params.userID,
+								login: e.params.login,
+								displayName: e.params.displayName,
+								lowerLogin: e.params.login?.toLowerCase()
+							},
+							badges: {},
+							badgeDynamicData: {}
+						};
+
+						return i.postMessageToCurrentChannel(e, out);
+
+					} catch (err) {
+						t.log.capture(err, { extra: e });
+						return old_raid.call(i, e);
+					}
+				};
 
 
 				const old_sub = this.onSubscriptionEvent;

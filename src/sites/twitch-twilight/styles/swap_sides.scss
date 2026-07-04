@@ -1,0 +1,13 @@
+.right-column__toggle-visibility {
+	display: inline-flex;
+	align-items: center;
+}
+
+.ffz--swap-sides {
+	display: none;
+	margin-left: 0.5rem;
+
+	.toggle-visibility__right-column--expanded & {
+		display: inline-flex;
+	}
+}

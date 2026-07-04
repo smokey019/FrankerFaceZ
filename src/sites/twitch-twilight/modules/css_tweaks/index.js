@@ -277,9 +277,14 @@ export default class CSSTweaks extends Module {
 
 		this.settings.add('layout.swap-sidebars', {
 			default: false,
-			requires: ['context.isWatchParty'],
+			requires: ['context.isWatchParty', 'context.flip_sidebars'],
 			process(ctx, val) {
-				return ctx.get('context.isWatchParty') ? false : val;
+				if ( ctx.get('context.isWatchParty') )
+					return false;
+
+				// context.flip_sidebars is per-tab state set by site.swap_sides,
+				// letting individual tabs invert the global setting.
+				return !! val !== !! ctx.get('context.flip_sidebars');
 			},
 			ui: {
 				path: 'Appearance > Layout >> Side Navigation',

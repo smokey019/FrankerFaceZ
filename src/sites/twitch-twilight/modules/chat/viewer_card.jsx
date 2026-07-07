@@ -282,8 +282,24 @@ export default class ViewerCards extends Module {
 					if ( ! out || ! React.isValidElement(out) || ! t.chat.context.get('chat.viewer-cards.session-logs') )
 						return out;
 
+					// The standalone popped-out viewer card
+					// (/popout/<channel>/viewercard/<user>) runs in its own window
+					// with no chat controller: our in-memory log map is never
+					// populated there, and no moderator context is ever set, so
+					// hide-if-mod below could never fire. Its root also renders into
+					// a horizontal (row) flex container, so the panel would land to
+					// the right of the whole card instead of below it. Skip it there
+					// entirely — the card's own prop flags this window, with a URL
+					// check as a fallback.
+					if ( this.props?.isPopoutCard || /\/viewercard\//.test(location.pathname) )
+						return out;
+
 					// Moderators already have Twitch's built-in mod logs here.
-					if ( t.chat.context.get('chat.viewer-cards.session-logs.hide-if-mod') && t.site.getUser()?.moderator )
+					// getUser()'s moderator flag is only stamped once a chat
+					// message has been received, so also check the chat context,
+					// which is set as soon as the chat controller mounts.
+					if ( t.chat.context.get('chat.viewer-cards.session-logs.hide-if-mod')
+							&& (t.chat.context.get('context.moderator') || t.site.getUser()?.moderator) )
 						return out;
 
 					const login = (this.props && this.props.targetLogin || '').toLowerCase();

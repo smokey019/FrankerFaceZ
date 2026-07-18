@@ -10,9 +10,14 @@
 	}
 }
 
-.right-column--theatre {
-	/* 1 higher than default Twitch, to make the expand button appear properly */
-	z-index: 3001;
+.right-column--theatre,
+body:has(.persistent-player--theatre) .right-column {
+	/* In theatre mode both the chat column and the player default to
+	   z-index: 3000, and current Twitch no longer puts a --theatre class on the
+	   chat column. Without lifting the column one above the player, a viewer card
+	   (which lives inside the chat column) drops behind the video when dragged
+	   over it. This also keeps the expand button above the player. */
+	z-index: 3001 !important;
 }
 
 .channel-root {

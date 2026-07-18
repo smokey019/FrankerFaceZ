@@ -4,10 +4,13 @@
 }
 
 .ffz--swap-sides {
-	display: none;
+	display: inline-flex;
 	margin-left: 0.5rem;
+}
 
-	.toggle-visibility__right-column--expanded & {
-		display: inline-flex;
-	}
+/* Hide the button only while chat is collapsed (there's no room for it then).
+   Gating on the collapsed state rather than the --expanded class means the
+   button also shows in theatre mode, where the expanded modifier is absent. */
+.right-column--collapsed .ffz--swap-sides {
+	display: none;
 }

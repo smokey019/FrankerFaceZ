@@ -1314,7 +1314,9 @@ export default class Input extends Module {
 			anim = this.chat.context.get('chat.emotes.animated') > 0,
 			hidden_sets = this.settings.provider.get('emote-menu.hidden-sets'),
 			has_hidden = Array.isArray(hidden_sets) && hidden_sets.length > 0,
-			added_emotes = new Set;
+			added_emotes = new Set,
+			hidden_cache = new Map,
+			fav_cache = new Map;
 
 		for(const set of sets) {
 			if ( ! set || ! set.emotes )
@@ -1327,8 +1329,15 @@ export default class Input extends Module {
 			if ( has_hidden && hidden_sets.includes(key) )
 				continue;
 
-			const hidden_emotes = this.emotes.getHidden(source),
-				favorites = this.emotes.getFavorites(source);
+			// getHidden/getFavorites read from the settings provider; only
+			// do that once per source, not once per set.
+			let hidden_emotes = hidden_cache.get(source);
+			if ( ! hidden_emotes )
+				hidden_cache.set(source, hidden_emotes = this.emotes.getHidden(source));
+
+			let favorites = fav_cache.get(source);
+			if ( ! favorites )
+				fav_cache.set(source, favorites = new Set(this.emotes.getFavorites(source)));
 
 			for(const emote of Object.values(set.emotes)) {
 				if ( ! emote || ! emote.id || emote.hidden || hidden_emotes.includes(emote.id) || added_emotes.has(emote.name) )
@@ -1346,7 +1355,7 @@ export default class Input extends Module {
 					token: emote.name,
 					tokenLower: emote.name.toLowerCase(),
 					srcSet: anim && emote.animSrcSet || emote.srcSet,
-					favorite: favorites.includes(emote.id)
+					favorite: favorites.has(emote.id)
 				});
 			}
 		}

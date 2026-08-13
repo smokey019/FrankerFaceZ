@@ -7,7 +7,7 @@
 import Module, { buildAddonProxy } from 'utilities/module';
 import {ManagedStyle} from 'utilities/dom';
 
-import {get, has, timeout, SourcedSet, make_enum_flags, makeAddonIdChecker, deep_copy} from 'utilities/object';
+import {get, has, timeout, debounce, SourcedSet, make_enum_flags, makeAddonIdChecker, deep_copy} from 'utilities/object';
 import {NEW_API, IS_OSX, EmoteTypes, TWITCH_GLOBAL_SETS, TWITCH_POINTS_SETS, TWITCH_PRIME_SETS, DEBUG} from 'utilities/constants';
 
 import GET_EMOTE from './emote_info.gql';
@@ -483,6 +483,10 @@ export default class Emotes extends Module {
 		// set ID list. Cleared whenever any set's contents change.
 		this._emote_map_cache = new Map;
 
+		// Coalesce filter registrations into a single filtered-emote pass;
+		// several addons register filters in a burst at startup.
+		this._updateFilteredDebounced = debounce(() => this.updateFiltered(), 150);
+
 		this.settings.add('chat.emotes.source-priorities', {
 			default: null,
 			ui: {
@@ -954,7 +958,7 @@ export default class Emotes extends Module {
 		});
 
 		if ( should_update )
-			this.updateFiltered();
+			this._updateFilteredDebounced();
 	}
 
 	removeFilter(filter, should_update = true) {
@@ -972,7 +976,7 @@ export default class Emotes extends Module {
 		if ( idx !== -1 ) {
 			this.__filters.splice(idx, 1);
 			if ( should_update )
-				this.updateFiltered();
+				this._updateFilteredDebounced();
 		}
 
 		return filter;

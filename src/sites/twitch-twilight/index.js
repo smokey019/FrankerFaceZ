@@ -139,7 +139,15 @@ export default class Twilight extends BaseSite {
 		});
 
 		// Share Context
-		store.subscribe(() => this.updateContext());
+		// Redux dispatch storms during navigation would otherwise run a
+		// deep-compare per action; coalesce to one update per frame.
+		store.subscribe(() => {
+			if ( ! this._context_frame )
+				this._context_frame = requestAnimationFrame(() => {
+					this._context_frame = null;
+					this.updateContext();
+				});
+		});
 		this.updateContext();
 
 		this.router.on(':route', (route, match) => {

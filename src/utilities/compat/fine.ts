@@ -47,6 +47,8 @@ export default class Fine extends Module<'site.fine', FineEvents> {
 	private _live_waiting: FineWrapper<any>[] | null;
 	private _waiting_crit?: FineCriteria<any>[] | null;
 	private _waiting_timer?: ReturnType<typeof setInterval> | null;
+	private _observer_targets?: Set<Node> | null;
+	private _observer_frame?: ReturnType<typeof requestAnimationFrame> | null;
 
 	/** @internal */
 	constructor(name?: string, parent?: GenericModule) {
@@ -734,12 +736,41 @@ export default class Fine extends Module<'site.fine', FineEvents> {
 
 	_startWaiting() {
 		this.log.info('Installing MutationObserver.');
-		this._waiting_timer = setInterval(() => this._checkWaiters(), 500);
+
+		// Scan quickly for the first ~10 seconds — nearly all matches
+		// happen during page boot — then back off. The observer still
+		// catches ordinary mounts immediately; the interval only exists
+		// for mounts that produce no childList mutations.
+		let ticks = 0;
+		this._waiting_timer = setInterval(() => {
+			if ( ++ticks === 20 && this._waiting_timer ) {
+				clearInterval(this._waiting_timer);
+				this._waiting_timer = setInterval(() => this._checkWaiters(), 2000);
+			}
+
+			this._checkWaiters();
+		}, 500);
 
 		if ( ! this._observer )
-			this._observer = new MutationObserver(mutations =>
-				this._checkWaiters(mutations.map(x => x.target))
-			);
+			this._observer = new MutationObserver(mutations => {
+				// Chat activity produces bursts of mutations, often on the
+				// same containers; dedupe the targets and run at most one
+				// check per animation frame.
+				if ( ! this._observer_targets )
+					this._observer_targets = new Set;
+
+				for(const mut of mutations)
+					this._observer_targets.add(mut.target);
+
+				if ( ! this._observer_frame )
+					this._observer_frame = requestAnimationFrame(() => {
+						const targets = this._observer_targets;
+						this._observer_targets = null;
+						this._observer_frame = null;
+						if ( targets && this._live_waiting )
+							this._checkWaiters(Array.from(targets));
+					});
+			});
 
 		this._observer.observe(document.body, {
 			childList: true,
@@ -757,6 +788,12 @@ export default class Fine extends Module<'site.fine', FineEvents> {
 		if ( this._waiting_timer )
 			clearInterval(this._waiting_timer);
 
+		if ( this._observer_frame ) {
+			cancelAnimationFrame(this._observer_frame);
+			this._observer_frame = null;
+		}
+
+		this._observer_targets = null;
 		this._live_waiting = null;
 		this._waiting_crit = null;
 		this._waiting_timer = null;

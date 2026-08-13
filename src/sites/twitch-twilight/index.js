@@ -140,13 +140,26 @@ export default class Twilight extends BaseSite {
 
 		// Share Context
 		// Redux dispatch storms during navigation would otherwise run a
-		// deep-compare per action; coalesce to one update per frame.
+		// deep-compare per action; coalesce to one update per frame. A
+		// timer backstop keeps context updating in hidden tabs, where
+		// rAF never fires.
+		const flushContext = () => {
+			if ( this._context_frame ) {
+				cancelAnimationFrame(this._context_frame);
+				this._context_frame = null;
+			}
+			if ( this._context_timer ) {
+				clearTimeout(this._context_timer);
+				this._context_timer = null;
+			}
+			this.updateContext();
+		};
+
 		store.subscribe(() => {
-			if ( ! this._context_frame )
-				this._context_frame = requestAnimationFrame(() => {
-					this._context_frame = null;
-					this.updateContext();
-				});
+			if ( ! this._context_frame ) {
+				this._context_frame = requestAnimationFrame(flushContext);
+				this._context_timer = setTimeout(flushContext, 500);
+			}
 		});
 		this.updateContext();
 

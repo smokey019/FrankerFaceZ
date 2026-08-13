@@ -2134,7 +2134,7 @@ export default class Emotes extends Module {
 			} catch(err) { /* do nothing */ }
 
 		try {
-			response = await fetch(`${this.staging.api}/v1/set/global/ids`, {signal: AbortSignal.timeout(5000)})
+			response = await fetch(`${this.staging.api}/v1/set/global/ids`, {signal: AbortSignal.timeout?.(5000)})
 		} catch(err) {
 			tries++;
 			if ( tries < 10 )
@@ -2153,6 +2153,14 @@ export default class Emotes extends Module {
 		try {
 			data = await response.json();
 		} catch(err) {
+			// The abort timer keeps running while the body streams, so a
+			// mid-body timeout lands here; treat it like a network failure.
+			if ( err?.name === 'TimeoutError' || err?.name === 'AbortError' ) {
+				tries++;
+				if ( tries < 10 )
+					return setTimeout(() => this.loadGlobalSets(tries), 500 * tries);
+			}
+
 			this.log.error('Error parsing global emote data.', err);
 			this.load_tracker.notify('chat-data', 'ffz-global', false);
 			return false;
@@ -2195,7 +2203,7 @@ export default class Emotes extends Module {
 			} catch(err) { /* do nothing */ }
 
 		try {
-			response = await fetch(`${this.staging.api}/v1/set/${set_id}${this.staging.active ? '/ids' : ''}`, {signal: AbortSignal.timeout(5000)})
+			response = await fetch(`${this.staging.api}/v1/set/${set_id}${this.staging.active ? '/ids' : ''}`, {signal: AbortSignal.timeout?.(5000)})
 		} catch(err) {
 			tries++;
 			if ( tries < 10 )
@@ -2214,6 +2222,14 @@ export default class Emotes extends Module {
 		try {
 			data = await response.json();
 		} catch(err) {
+			// The abort timer keeps running while the body streams, so a
+			// mid-body timeout lands here; treat it like a network failure.
+			if ( err?.name === 'TimeoutError' || err?.name === 'AbortError' ) {
+				tries++;
+				if ( tries < 10 )
+					return setTimeout(() => this.loadSet(set_id, suppress_log, tries), 500 * tries);
+			}
+
 			this.log.error(`Error parsing data for set "${set_id}".`, err);
 			this.load_tracker.notify('chat-data', load_key, false);
 			return false;
@@ -2490,6 +2506,9 @@ export default class Emotes extends Module {
 				if ( this.style )
 					this.style.delete(`es--${set_id}`);
 				this.emote_sets[set_id] = null;
+				// No event fires on this path, and the set ID may remain in
+				// membership lists, so clear the memoized emote maps directly.
+				this._emote_map_cache.clear();
 			}
 
 			return;

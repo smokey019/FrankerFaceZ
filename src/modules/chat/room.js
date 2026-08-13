@@ -318,7 +318,7 @@ export default class Room {
 
 		let response, data;
 		try {
-			response = await fetch(`${this.manager.staging.api}/v1/room/${this.id ? `id/${this.id}` : this.login}`, {signal: AbortSignal.timeout(5000)});
+			response = await fetch(`${this.manager.staging.api}/v1/room/${this.id ? `id/${this.id}` : this.login}`, {signal: AbortSignal.timeout?.(5000)});
 		} catch(err) {
 			tries++;
 			if ( tries < 10 )
@@ -337,6 +337,14 @@ export default class Room {
 		try {
 			data = await response.json();
 		} catch(err) {
+			// The abort timer keeps running while the body streams, so a
+			// mid-body timeout lands here; treat it like a network failure.
+			if ( err?.name === 'TimeoutError' || err?.name === 'AbortError' ) {
+				tries++;
+				if ( tries < 10 )
+					return setTimeout(() => this.load_data(tries), 500 * tries);
+			}
+
 			this.manager.log.error(`Error parsing room data for ${this.id}:${this.login}`, err);
 			this.manager.load_tracker.notify('chat-data', load_key, false);
 			return false;

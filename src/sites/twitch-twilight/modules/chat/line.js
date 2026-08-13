@@ -1829,12 +1829,24 @@ other {# messages were deleted by a moderator.}
 			this._pending_wrappers.set(instances[i], wrapper);
 		}
 
-		if ( ! this._update_frame )
+		if ( ! this._update_frame ) {
 			this._update_frame = requestAnimationFrame(() => this._processChunkedUpdate());
+			// rAF never fires in hidden tabs; back it up with a timer so
+			// the queue still drains (and doesn't retain instances) there.
+			this._update_timer = setTimeout(() => this._processChunkedUpdate(), 500);
+		}
 	}
 
 	_processChunkedUpdate() {
-		this._update_frame = null;
+		if ( this._update_frame ) {
+			cancelAnimationFrame(this._update_frame);
+			this._update_frame = null;
+		}
+
+		if ( this._update_timer ) {
+			clearTimeout(this._update_timer);
+			this._update_timer = null;
+		}
 
 		const CHUNK = 25;
 		let i = 0;
@@ -1859,7 +1871,9 @@ other {# messages were deleted by a moderator.}
 			}
 		}
 
-		if ( this._pending_updates.size )
+		if ( this._pending_updates.size ) {
 			this._update_frame = requestAnimationFrame(() => this._processChunkedUpdate());
+			this._update_timer = setTimeout(() => this._processChunkedUpdate(), 500);
+		}
 	}
 }

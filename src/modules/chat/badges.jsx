@@ -1241,7 +1241,7 @@ export default class Badges extends Module {
 			} catch(err) { /* do nothing */ }
 
 		try {
-			response = await fetch(`${this.staging.api}/v1/badges/ids`, {signal: AbortSignal.timeout(5000)});
+			response = await fetch(`${this.staging.api}/v1/badges/ids`, {signal: AbortSignal.timeout?.(5000)});
 		} catch(err) {
 			tries++;
 			if ( tries < 10 )
@@ -1260,6 +1260,14 @@ export default class Badges extends Module {
 		try {
 			data = await response.json();
 		} catch(err) {
+			// The abort timer keeps running while the body streams, so a
+			// mid-body timeout lands here; treat it like a network failure.
+			if ( err?.name === 'TimeoutError' || err?.name === 'AbortError' ) {
+				tries++;
+				if ( tries < 10 )
+					return setTimeout(() => this.loadGlobalBadges(tries), 500 * tries);
+			}
+
 			this.log.error('Error parsing global badge data.', err);
 			this.load_tracker.notify('chat-data', 'ffz-global-badges', false);
 			return false;

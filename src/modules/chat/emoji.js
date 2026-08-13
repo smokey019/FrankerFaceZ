@@ -163,7 +163,7 @@ export default class Emoji extends Module {
 	async loadEmojiData(tries = 0) {
 		let data;
 		try {
-			data = await fetch(`${SERVER}/script/emoji/v3.2.json?_${getBuster(60)}`, {signal: AbortSignal.timeout(5000)}).then(r =>
+			data = await fetch(`${SERVER}/script/emoji/v3.2.json?_${getBuster(60)}`, {signal: AbortSignal.timeout?.(5000)}).then(r =>
 				r.ok ? r.json() : null
 			);
 

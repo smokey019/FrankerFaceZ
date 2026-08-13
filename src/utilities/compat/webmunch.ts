@@ -165,6 +165,23 @@ function computeSCC(graph: Record<string, GraphNode>, node_ids: Set<string>): st
 
 
 
+// Kill switch for time-sliced module processing; set false to restore
+// the old single-task synchronous scan.
+const TIME_SLICE_PROCESSING = true;
+
+// Yield control back to the browser between processing slices. Prefer
+// scheduler.yield() where available; otherwise use a MessageChannel
+// macrotask, which doesn't suffer setTimeout's nesting clamp.
+const yieldToMain: () => Promise<void> =
+	(globalThis as any).scheduler?.yield
+		? () => (globalThis as any).scheduler.yield()
+		: () => new Promise<void>(resolve => {
+			const channel = new MessageChannel();
+			channel.port1.onmessage = () => { channel.port1.close(); resolve(); };
+			channel.port2.postMessage(null);
+		});
+
+
 export default class WebMunch extends Module<'site.web_munch', WebMunchEvents> {
 
 	_original_store?: WebpackStoreV4 | null;
@@ -180,8 +197,12 @@ export default class WebMunch extends Module<'site.web_munch', WebMunchEvents> {
 
 	_graph: Record<string, GraphNode>;
 	_graph_update_raf?: ReturnType<typeof requestAnimationFrame> | null;
+	_graph_update_timer?: ReturnType<typeof setTimeout> | null;
 
 	_processed_all?: boolean;
+	_process_done?: boolean;
+	_process_settled?: Promise<void> | null;
+	_process_settled_resolve?: (() => void) | null;
 
 	_require_waiter?: Promise<WebpackRequireV4> | null;
 	_load_waiter?: Promise<WebpackLoaderV4> | null;
@@ -205,6 +226,12 @@ export default class WebMunch extends Module<'site.web_munch', WebMunchEvents> {
 		this._pending_ready_ids = new Set;
 		this._loaded_ids = new Set;
 		this._graph = {};
+
+		// Settled once the initial full module scan (and a following
+		// graph pass) has completed; findModule uses this to retry.
+		this._process_settled = new Promise<void>(resolve => {
+			this._process_settled_resolve = resolve;
+		});
 
 		this.hookLoader();
 		this.getRequire();
@@ -409,15 +436,67 @@ export default class WebMunch extends Module<'site.web_munch', WebMunchEvents> {
 	}
 
 
-	private _processAllModules() {
+	private async _processAllModules() {
 		if ( ! this._require?.m || ! this._original_store || this._processed_all )
 			return;
 
 		this._processed_all = true;
 
-		for(const chunk of this._original_store)
-			if ( chunk && chunk[1] )
-				this._processModulesV4(chunk[1]);
+		// Snapshot the chunk list; chunks pushed while we're slicing are
+		// handled synchronously by webpackJsonpv4 and re-processing a
+		// module is a no-op thanks to the Unloaded state check.
+		const chunks = Array.from(this._original_store);
+
+		if ( TIME_SLICE_PROCESSING )
+			try {
+				const SLICE_BUDGET = 8;
+				let deadline = performance.now() + SLICE_BUDGET,
+					need_graph = false;
+
+				for(const chunk of chunks) {
+					if ( ! chunk || ! chunk[1] )
+						continue;
+
+					for(const mod_id of Object.keys(chunk[1])) {
+						if ( performance.now() > deadline ) {
+							// Let consumers see progress between slices.
+							if (need_graph || this._pending_ready_ids.size > 0) {
+								need_graph = false;
+								this.scheduleGraphUpdate();
+							}
+
+							await yieldToMain();
+							deadline = performance.now() + SLICE_BUDGET;
+						}
+
+						if ( this._processModule(mod_id) )
+							need_graph = true;
+					}
+				}
+
+				this._finishProcessingAll();
+				return;
+
+			} catch(err) {
+				this.log.error('Error time-slicing module processing; falling back to synchronous processing.', err);
+			}
+
+		try {
+			for(const chunk of chunks)
+				if ( chunk && chunk[1] )
+					this._processModulesV4(chunk[1]);
+		} catch(err) {
+			this.log.error('Error processing modules.', err);
+		}
+
+		this._finishProcessingAll();
+	}
+
+	private _finishProcessingAll() {
+		this._process_done = true;
+		// Always run a final graph pass; it also settles the
+		// processed-all promise that findModule waits on.
+		this.scheduleGraphUpdate();
 	}
 
 	/**
@@ -428,37 +507,43 @@ export default class WebMunch extends Module<'site.web_munch', WebMunchEvents> {
 	 * @returns A list of ids of modules that are now ready
 	 */
 	private _processModulesV4(modules: Record<string, Function>) {
-		const require = this._require;
 		let need_graph = false;
 
-		for(const mod_id of Object.keys(modules)) {
-			const node = this._getNode(mod_id),
-				fn = require?.m?.[mod_id];
-
-			if (node.state !== NodeState.Unloaded || ! fn)
-				continue;
-
-			node.state = NodeState.Loaded;
-			this._loaded_ids.add(mod_id);
-
-			if (node.requires == null)
-				this._detectRequirements(node, fn);
-
-			if (node.requires === false) {
-				node.state = NodeState.Ready;
-				this._loaded_ids.delete(mod_id);
-				this._pending_ready_ids.add(mod_id);
-			}
-
-			// Mark any nodes that depend on this node as dirty
-			// so we can reprocess that section of the graph.
-			if (node.dependants && node.dependants.size > 0)
+		for(const mod_id of Object.keys(modules))
+			if ( this._processModule(mod_id) )
 				need_graph = true;
-		}
 
 		// Schedule a graph update, maybe.
 		if (need_graph || this._pending_ready_ids.size > 0)
 			this.scheduleGraphUpdate();
+	}
+
+	/**
+	 * Process a single loaded module, updating its graph node.
+	 * @returns Whether the module has dependants, requiring a graph update.
+	 */
+	private _processModule(mod_id: string) {
+		const node = this._getNode(mod_id),
+			fn = this._require?.m?.[mod_id];
+
+		if (node.state !== NodeState.Unloaded || ! fn)
+			return false;
+
+		node.state = NodeState.Loaded;
+		this._loaded_ids.add(mod_id);
+
+		if (node.requires == null)
+			this._detectRequirements(node, fn);
+
+		if (node.requires === false) {
+			node.state = NodeState.Ready;
+			this._loaded_ids.delete(mod_id);
+			this._pending_ready_ids.add(mod_id);
+		}
+
+		// Mark any nodes that depend on this node as dirty
+		// so we can reprocess that section of the graph.
+		return !!(node.dependants && node.dependants.size > 0);
 	}
 
 
@@ -505,8 +590,12 @@ export default class WebMunch extends Module<'site.web_munch', WebMunchEvents> {
 	}
 
 	scheduleGraphUpdate() {
-		if ( ! this._graph_update_raf)
+		if ( ! this._graph_update_raf) {
 			this._graph_update_raf = requestAnimationFrame(this._processGraph);
+			// rAF never fires in background tabs; back it up with a timer
+			// so the graph (and findModule waiters) can't stall there.
+			this._graph_update_timer = setTimeout(this._processGraph, 1000);
+		}
 	}
 
 
@@ -519,7 +608,15 @@ export default class WebMunch extends Module<'site.web_munch', WebMunchEvents> {
 	 * @returns The updated list of module ids that are now ready.
 	 */
 	private _processGraph() {
-		this._graph_update_raf = null;
+		if ( this._graph_update_raf ) {
+			cancelAnimationFrame(this._graph_update_raf);
+			this._graph_update_raf = null;
+		}
+
+		if ( this._graph_update_timer ) {
+			clearTimeout(this._graph_update_timer);
+			this._graph_update_timer = null;
+		}
 
 		const start = performance.now();
 		const count = this._pending_ready_ids.size;
@@ -587,6 +684,11 @@ export default class WebMunch extends Module<'site.web_munch', WebMunchEvents> {
 			this._pending_ready_ids = new Set;
 			this.emit(':new-ready', ready_ids);
 		}
+
+		if ( this._process_done && this._process_settled_resolve ) {
+			this._process_settled_resolve();
+			this._process_settled_resolve = null;
+		}
 	}
 
 
@@ -609,7 +711,16 @@ export default class WebMunch extends Module<'site.web_munch', WebMunchEvents> {
 		if ( ! this._require )
 			await this.getRequire();
 
-		return this.getModule<T>(key, predicate);
+		let out = this.getModule<T>(key, predicate);
+
+		// If we didn't find it and the initial module scan hasn't finished
+		// yet, wait for it and look once more.
+		if ( out == null && ! this._process_done && this._process_settled ) {
+			await this._process_settled;
+			out = this.getModule<T>(key, predicate);
+		}
+
+		return out;
 	}
 
 

@@ -28,11 +28,13 @@ static_sites:
     envs:
       - key: FFZ_CDN
         scope: BUILD_TIME
-        value: https://frankerfacez-fork-pizrb.ondigitalocean.app   # your DO app domain (no trailing slash)
+        value: https://ffz-fork.smokey.gg   # code host domain (no trailing slash)
 
-# Using DO's default domain (frankerfacez-fork-pizrb.ondigitalocean.app). To use
-# your own domain, add a `domains:` block here and point FFZ_CDN at it. The
-# userscript install URL is: https://<domain>/script/script.min.js
+# Serving from the custom domain below (DNS for it must CNAME to the DO app).
+# The userscript install URL is: https://ffz-fork.smokey.gg/script/script.min.js
+domains:
+  - domain: ffz-fork.smokey.gg
+    type: PRIMARY
 
 # The client is loaded cross-origin from twitch.tv: scripts use
 # crossorigin="anonymous" AND @font-face fonts are always CORS-checked, so every

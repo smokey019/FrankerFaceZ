@@ -2121,7 +2121,7 @@ export default class Emotes extends Module {
 		} catch(err) {
 			tries++;
 			if ( tries < 10 )
-				return setTimeout(() => this.loadGlobalSets(tries), 500 * tries);
+				return setTimeout(() => this.loadSet(set_id, suppress_log, tries), 500 * tries);
 
 			this.log.error(`Error loading data for set "${set_id}".`, err);
 			this.load_tracker.notify('chat-data', load_key, false);

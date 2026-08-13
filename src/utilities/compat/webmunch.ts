@@ -8,6 +8,7 @@
 import Module, { type GenericModule } from 'utilities/module';
 import {has, generateUUID, makeAddonIdChecker} from 'utilities/object';
 import { DEBUG } from 'utilities/constants';
+import { LogLevel } from 'utilities/logging';
 
 declare module 'utilities/types' {
 	interface ModuleEventMap {
@@ -304,14 +305,17 @@ export default class WebMunch extends Module<'site.web_munch', WebMunchEvents> {
 
 
 	webpackJsonpv4(data: WebpackLoaderDataV4, ...args: unknown[]) {
-		const chunk_ids = data[0].map(x => typeof x !== 'string' ? `${x}` : x),
-			modules = data[1],
-			names = Array.isArray(chunk_ids)
-				? chunk_ids.map(x => this._chunk_names[x] ?? x)
-				: null;
+		const modules = data[1];
 
-		this.log.verbose(`Twitch Chunk Loaded: ${chunk_ids} (${names?.join(', ')})`);
-		this.log.verbose(`Modules: ${Object.keys(modules)}`);
+		// This runs for every chunk Twitch loads; don't build the log
+		// strings unless verbose logging is actually on.
+		if ( this.log.enabled && this.log.level <= LogLevel.Verbose ) {
+			const chunk_ids = data[0].map(x => typeof x !== 'string' ? `${x}` : x),
+				names = chunk_ids.map(x => this._chunk_names[x] ?? x);
+
+			this.log.verbose(`Twitch Chunk Loaded: ${chunk_ids} (${names.join(', ')})`);
+			this.log.verbose(`Modules: ${Object.keys(modules)}`);
+		}
 
 		const res = this._original_loader!.call(this._original_store, data, ...args); // eslint-disable-line prefer-rest-params
 

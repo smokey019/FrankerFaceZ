@@ -977,6 +977,9 @@ export default class Emotes extends Module {
 	updateFiltered() {
 		// Iterate over every emote set, updating filtered emotes.
 		for(const set of Object.values(this.emote_sets)) {
+			// Sets can be null (see loadSetData / unloadSet).
+			if ( ! set || ! set.emotes )
+				continue;
 
 			const emotes = {},
 				filtered = {};

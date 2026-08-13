@@ -160,6 +160,14 @@ export default class ExperimentManager extends Module<'experiments', ExperimentE
 
 	private cache: Map<keyof ExperimentTypeMap, unknown>;
 
+	// First-seen timestamps per experiment key, persisted so the UI can
+	// sort by when this client first observed each experiment. Neither
+	// FFZ's nor Twitch's experiment data carries a creation date.
+	private _seen: {
+		ffz: Record<string, number>;
+		twitch: Record<string, number>;
+	};
+
 
 	// Helpers
 	Cookie: typeof Cookie;
@@ -169,6 +177,17 @@ export default class ExperimentManager extends Module<'experiments', ExperimentE
 		super(name, parent);
 
 		this.get = this.getAssignment;
+
+		this._seen = { ffz: {}, twitch: {} };
+		try {
+			const stored = JSON.parse(localStorage.getItem('FFZ:experiment-seen') ?? 'null');
+			if ( stored && typeof stored === 'object' ) {
+				if ( stored.ffz && typeof stored.ffz === 'object' )
+					this._seen.ffz = stored.ffz;
+				if ( stored.twitch && typeof stored.twitch === 'object' )
+					this._seen.twitch = stored.twitch;
+			}
+		} catch(err) { /* no-op */ }
 
 		this.inject('settings');
 
@@ -202,8 +221,8 @@ export default class ExperimentManager extends Module<'experiments', ExperimentE
 
 			unique_id: () => this.unique_id,
 
-			ffz_data: () => deep_copy(this.experiments),
-			twitch_data: () => deep_copy(this.getTwitchExperiments()),
+			ffz_data: () => this._annotateSeen(deep_copy(this.experiments), this._seen.ffz),
+			twitch_data: () => this._annotateSeen(deep_copy(this.getTwitchExperiments()), this._seen.twitch),
 
 			usingTwitchExperiment: (key: string) => this.usingTwitchExperiment(key),
 			getTwitchAssignment: (key: string) => this.getTwitchAssignment(key),
@@ -227,6 +246,46 @@ export default class ExperimentManager extends Module<'experiments', ExperimentE
 
 		this.experiments = {};
 		this.cache = new Map;
+	}
+
+
+	/**
+	 * Stamp first-seen timestamps for new keys and prune keys that no
+	 * longer exist, persisting only when something changed. Empty key
+	 * lists are ignored — the data source may simply not be ready yet.
+	 */
+	private _trackSeen(map: Record<string, number>, keys: string[]) {
+		if ( ! keys.length )
+			return;
+
+		const now = Date.now(),
+			wanted = new Set(keys);
+		let changed = false;
+
+		for(const key of keys)
+			if ( ! map[key] ) {
+				map[key] = now;
+				changed = true;
+			}
+
+		for(const key of Object.keys(map))
+			if ( ! wanted.has(key) ) {
+				delete map[key];
+				changed = true;
+			}
+
+		if ( changed )
+			try {
+				localStorage.setItem('FFZ:experiment-seen', JSON.stringify(this._seen));
+			} catch(err) { /* no-op */ }
+	}
+
+	private _annotateSeen<T extends Record<string, unknown>>(data: T, seen: Record<string, number>) {
+		for(const [key, exp] of Object.entries(data))
+			if ( exp && typeof exp === 'object' )
+				(exp as {seen?: number}).seen = seen[key] ?? 0;
+
+		return data;
 	}
 
 
@@ -284,6 +343,7 @@ export default class ExperimentManager extends Module<'experiments', ExperimentE
 			return;
 
 		this.experiments = data;
+		this._trackSeen(this._seen.ffz, Object.keys(data));
 
 		if ( ! DEBUG )
 			try {
@@ -439,11 +499,16 @@ export default class ExperimentManager extends Module<'experiments', ExperimentE
 	}
 
 	getTwitchExperiments(): Record<string, TwitchExperimentData> {
+		let out: Record<string, TwitchExperimentData>;
 		if ( window.__twilightSettings )
-			return window.__twilightSettings.experiments ?? {};
+			out = window.__twilightSettings.experiments ?? {};
+		else {
+			const core = this.resolve('site')?.getCore?.();
+			out = core && core.experiments.experiments || {};
+		}
 
-		const core = this.resolve('site')?.getCore?.();
-		return core && core.experiments.experiments || {};
+		this._trackSeen(this._seen.twitch, Object.keys(out));
+		return out;
 	}
 
 

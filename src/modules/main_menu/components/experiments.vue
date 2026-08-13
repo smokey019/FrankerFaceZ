@@ -19,6 +19,9 @@
 				<option :selected="sort_by === 1">
 					{{ t('setting.experiments.sort-rarity', 'Sort By: Rarity') }}
 				</option>
+				<option :selected="sort_by === 2">
+					{{ t('setting.experiments.sort-added', 'Sort By: Date Added') }}
+				</option>
 			</select>
 		</div>
 		<div class="tw-mg-b-2 tw-flex tw-align-items-center">
@@ -238,7 +241,7 @@ export default {
 		return {
 			code: pick_random(CODES),
 			experiments_locked: this.item.is_locked(),
-			sort_by: 1,
+			sort_by: 2,
 			unused: false,
 			unique_id: this.item.unique_id(),
 			ffz_data: this.item.ffz_data(),
@@ -357,6 +360,14 @@ export default {
 
 					if ( a_r < b_r ) return -1;
 					if ( a_r > b_r ) return 1;
+
+				} else if ( this.sort_by === 2 ) {
+					// First-seen timestamps; newest first. Ties (including
+					// everything stamped on the feature's first run) fall
+					// through to the name sort below.
+					const diff = (b.exp.seen || 0) - (a.exp.seen || 0);
+					if ( diff )
+						return diff;
 				}
 
 				const a_n = a.exp.name?.toLowerCase() ?? a.key?.toLowerCase(),

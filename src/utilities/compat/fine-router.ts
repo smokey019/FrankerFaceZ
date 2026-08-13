@@ -126,12 +126,10 @@ export default class FineRouter extends Module<'site.router', FineRouterEvents> 
 		this.navigator = nav?.pendingProps?.navigator;
 
 		if ( ! this.router || ! this.navigator ) {
-			if (tries > 100) {
+			if (tries === 100)
 				this.log.warn('Finding React\'s router is taking a long time.');
-				tries = -500;
-			}
 
-			return sleep(50).then(() => this.onEnable(tries + 1));
+			return sleep(tries >= 100 ? 500 : 50).then(() => this.onEnable(tries + 1));
 		}
 
 		this.router.subscribe(evt => {

@@ -318,7 +318,7 @@ export default class Room {
 
 		let response, data;
 		try {
-			response = await fetch(`${this.manager.staging.api}/v1/room/${this.id ? `id/${this.id}` : this.login}`);
+			response = await fetch(`${this.manager.staging.api}/v1/room/${this.id ? `id/${this.id}` : this.login}`, {signal: AbortSignal.timeout(5000)});
 		} catch(err) {
 			tries++;
 			if ( tries < 10 )

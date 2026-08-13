@@ -1241,7 +1241,7 @@ export default class Badges extends Module {
 			} catch(err) { /* do nothing */ }
 
 		try {
-			response = await fetch(`${this.staging.api}/v1/badges/ids`);
+			response = await fetch(`${this.staging.api}/v1/badges/ids`, {signal: AbortSignal.timeout(5000)});
 		} catch(err) {
 			tries++;
 			if ( tries < 10 )

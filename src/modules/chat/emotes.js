@@ -2087,7 +2087,7 @@ export default class Emotes extends Module {
 			} catch(err) { /* do nothing */ }
 
 		try {
-			response = await fetch(`${this.staging.api}/v1/set/global/ids`)
+			response = await fetch(`${this.staging.api}/v1/set/global/ids`, {signal: AbortSignal.timeout(5000)})
 		} catch(err) {
 			tries++;
 			if ( tries < 10 )
@@ -2148,7 +2148,7 @@ export default class Emotes extends Module {
 			} catch(err) { /* do nothing */ }
 
 		try {
-			response = await fetch(`${this.staging.api}/v1/set/${set_id}${this.staging.active ? '/ids' : ''}`)
+			response = await fetch(`${this.staging.api}/v1/set/${set_id}${this.staging.active ? '/ids' : ''}`, {signal: AbortSignal.timeout(5000)})
 		} catch(err) {
 			tries++;
 			if ( tries < 10 )

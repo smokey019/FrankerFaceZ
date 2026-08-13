@@ -85,6 +85,16 @@
 								</template>
 							</t-list>
 						</p>
+						<p v-if="loaded && emote.addedBy" class="tw-c-text-alt-2 ffz-font-size-6 tw-ellipsis">
+							<t-list
+								phrase="emote-card.added-by"
+								default="Added by: {user}"
+							>
+								<template #user>
+									{{ emote.addedBy }}
+								</template>
+							</t-list>
+						</p>
 					</div>
 					<button
 						v-if="canFavorite"

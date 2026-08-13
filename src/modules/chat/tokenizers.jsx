@@ -1494,7 +1494,7 @@ export const AddonEmotes = {
 			provider = ds.provider,
 			modifiers = ds.modifierInfo;
 
-		let name, preview, source, artist, owner, mods, fav_source, emote_id,
+		let name, preview, source, artist, owner, added_by, mods, fav_source, emote_id,
 			original_name,
 			plain_name = false;
 
@@ -1598,6 +1598,17 @@ export const AddonEmotes = {
 						'emote.owner', 'By: {owner}',
 						{owner: emote.owner.display_name});
 
+				// Who added the emote to the channel, if known. Add-ons may
+				// set this as a string or as a {display_name, name} object.
+				const raw_added_by = typeof emote.added_by === 'string'
+					? emote.added_by
+					: (emote.added_by?.display_name || emote.added_by?.name);
+
+				if ( raw_added_by )
+					added_by = this.i18n.t(
+						'emote.added-by', 'Added by: {user}',
+						{user: raw_added_by});
+
 				const anim = this.context.get('tooltip.emote-images.animated');
 				if ( anim && emote.animated?.[1] ) {
 					if ( emote.animated[4] )
@@ -1614,6 +1625,7 @@ export const AddonEmotes = {
 
 				if ( ds.effects && emote.modifier && emote.modifier_flags ) {
 					owner = null;
+					added_by = null;
 
 					const effects = emote.modifier_flags;
 					this.emotes.ensureEffect(effects);
@@ -1788,6 +1800,10 @@ export const AddonEmotes = {
 					'emote.artist', 'Artist: {artist}',
 					{artist}
 				)}
+			</div>),
+
+			added_by && this.context.get('tooltip.emote-sources') && (<div class="tw-pd-t-05">
+				{added_by}
 			</div>),
 
 			ds.sellout && (<div class="tw-mg-t-05 tw-border-t tw-pd-t-05">{ds.sellout}</div>),

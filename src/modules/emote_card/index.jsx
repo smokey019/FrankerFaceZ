@@ -426,6 +426,9 @@ export default class EmoteCard extends Module {
 			artistLink: data.artist && ! emote_set.source
 				? `https://www.frankerfacez.com/${data.artist.name}`
 				: null,
+			addedBy: typeof data.added_by === 'string'
+				? data.added_by
+				: (data.added_by?.display_name || data.added_by?.name || null),
 		};
 
 		if ( ! emote_set.source ) {

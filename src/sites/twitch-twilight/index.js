@@ -66,7 +66,7 @@ export default class Twilight extends BaseSite {
 		this.router.route(Twilight.CLIP_ROUTES, 'clips.twitch.tv');
 	}
 
-	onEnable() {
+	onEnable(tries = 0) {
 		this.settings = this.resolve('settings');
 
 		//window.ffzSimplebar = window.ffzSimplebar || SimpleBar;
@@ -76,11 +76,27 @@ export default class Twilight extends BaseSite {
 				window.ffzSimplebar = sb;
 		}).catch(() => {});*/
 
+		// Our stylesheet doesn't depend on the store; inject it immediately
+		// so styling is ready as early as possible. (Guarded so the retry
+		// path below doesn't add duplicates.)
+		if ( ! this._css_injected ) {
+			this._css_injected = true;
+			document.head.appendChild(createElement('link', {
+				href: MAIN_URL,
+				rel: 'stylesheet',
+				type: 'text/css',
+				crossOrigin: 'anonymous'
+			}));
+		}
+
 		const thing = this.fine.searchNode(null, n => n?.pendingProps?.store?.getState),
 			store = this.store = thing?.pendingProps?.store;
 
-		if ( ! store )
-			return new Promise(r => setTimeout(r, 50)).then(() => this.onEnable());
+		if ( ! store ) {
+			if ( tries === 100 )
+				this.log.warn('Unable to find the Redux store after 5 seconds; continuing to retry.');
+			return new Promise(r => setTimeout(r, tries > 100 ? 500 : 50)).then(() => this.onEnable(tries + 1));
+		}
 
 		// Event Bridge
 		this.on(':dom-update', (...args) => {
@@ -143,13 +159,6 @@ export default class Twilight extends BaseSite {
 			route: current,
 			route_data: this.router.match
 		});
-
-		document.head.appendChild(createElement('link', {
-			href: MAIN_URL,
-			rel: 'stylesheet',
-			type: 'text/css',
-			crossOrigin: 'anonymous'
-		}));
 
 		// Check for ?ffz-settings in page and open the
 		// settings window in exclusive mode.

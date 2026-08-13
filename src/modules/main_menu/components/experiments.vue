@@ -1,7 +1,12 @@
 <template lang="html">
 	<div class="ffz--experiments tw-pd-t-05">
 		<div class="tw-pd-b-1 tw-mg-b-1 tw-border-b">
-			{{ t('setting.experiments.about', 'This feature allows you to override experiment values. Please note that, for most experiments, you may have to refresh the page for your changes to take effect.') }}
+			<div>
+				{{ t('setting.experiments.about', 'This feature allows you to override experiment values. Please note that, for most experiments, you may have to refresh the page for your changes to take effect.') }}
+			</div>
+			<div class="tw-mg-t-05 tw-c-text-alt-2">
+				{{ t('setting.experiments.detected-about', 'Experiment data does not include any sort of creation date, so a true "date added" cannot be retrieved. The "Detected" date shown on each experiment is when your client first saw it. Experiments that already existed when this feature first ran will all share the same initial date.') }}
+			</div>
 		</div>
 
 		<div class="tw-mg-b-2 tw-flex tw-align-items-center">
@@ -20,7 +25,7 @@
 					{{ t('setting.experiments.sort-rarity', 'Sort By: Rarity') }}
 				</option>
 				<option :selected="sort_by === 2">
-					{{ t('setting.experiments.sort-added', 'Sort By: Date Added') }}
+					{{ t('setting.experiments.sort-detected', 'Sort By: Date Detected') }}
 				</option>
 			</select>
 		</div>
@@ -66,6 +71,9 @@
 						<h4 class="ffz-font-size-4">{{ exp.name ? exp.name : key }}</h4>
 						<div v-if="exp.description" class="description">
 							{{ exp.description }}
+						</div>
+						<div v-if="exp.seen" class="tw-c-text-alt-2 ffz-font-size-7">
+							{{ t('setting.experiments.detected', 'Detected: {when,datetime}', {when: exp.seen}) }}
 						</div>
 					</div>
 
@@ -166,6 +174,9 @@
 							<h4 class="ffz-font-size-4">{{ exp.name }}</h4>
 							<div class="description">
 								{{ exp.remainder }}
+							</div>
+							<div v-if="exp.seen" class="tw-c-text-alt-2 ffz-font-size-7">
+								{{ t('setting.experiments.detected', 'Detected: {when,datetime}', {when: exp.seen}) }}
 							</div>
 						</div>
 

@@ -3,60 +3,64 @@
 # ===========================================================================
 # Hosts YOUR custom build. The client still pulls DATA + static assets from
 # FFZ's own infra (api / cdn / cdn2.frankerfacez.com) — only the code bundle is
-# served from here. Validate against the current app spec:
+# served from here. This file mirrors the LIVE app spec (app name and component
+# name must match the existing app or `doctl apps update` will misbehave).
+# Apply changes with:
+#   doctl apps update <app-id> --spec .do/app.yaml
+# Validate against the current app spec:
 #   https://docs.digitalocean.com/products/app-platform/reference/app-spec/
-# Replace the TODO domains before deploying.
 # ===========================================================================
 
-name: ffz-client
+name: frankerfacez-fork
 region: nyc
 
-static_sites:
-  - name: client
-    github:
-      repo: smokey019/FrankerFaceZ
-      branch: master
-      deploy_on_push: true
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
 
-    # bun is detected from packageManager (bun@1.3.10) / bun.lock.
-    build_command: bun install --frozen-lockfile && bun run build
-    output_dir: dist
+features:
+  - buildpack-stack=ubuntu-22
 
-    # Build-time: where this app is served (your code host). It's baked into the
-    # loader (src/entry.js) and the webpack publicPath. Set it to this app's
-    # domain so the loader + chunks resolve to your DO host.
-    envs:
-      - key: FFZ_CDN
-        scope: BUILD_TIME
-        value: https://ffz-fork.smokey.gg   # code host domain (no trailing slash)
-
-# Serving from the custom domain below (DNS for it must CNAME to the DO app).
+# Custom domain (DNS: Cloudflare-proxied CNAME to the app's default ingress).
 # The userscript install URL is: https://ffz-fork.smokey.gg/script/script.min.js
 domains:
   - domain: ffz-fork.smokey.gg
     type: PRIMARY
 
+static_sites:
+  - name: frankerfacez
+    environment_slug: bun
+    github:
+      repo: smokey019/FrankerFaceZ
+      branch: master
+      deploy_on_push: true
+    source_dir: /
+
+    # bun is detected from packageManager (bun@1.3.10) / bun.lock.
+    build_command: bun run build
+
+    # Build-time: where this app is served (your code host). It's baked into
+    # the loader (src/entry.js) and the webpack publicPath, so the loader +
+    # chunks resolve to this domain.
+    envs:
+      - key: NODE_ENV
+        scope: BUILD_TIME
+        value: production
+      - key: FFZ_CDN
+        scope: BUILD_TIME
+        value: https://ffz-fork.smokey.gg
+
 # The client is loaded cross-origin from twitch.tv: scripts use
 # crossorigin="anonymous" AND @font-face fonts are always CORS-checked, so every
 # asset must be served with CORS or the browser blocks it (the exact error you
 # get without this). These are public, credential-less assets.
-#
-# NOTE: this `ingress` is what adds the Access-Control-Allow-Origin header. If
-# your live app was created via the dashboard, it won't have this block — add it
-# (matching your component's name) under Settings -> App Spec, or apply this
-# whole file with `doctl apps update <id> --spec .do/app.yaml`.
 ingress:
   rules:
     - match:
         path:
           prefix: /
       component:
-        name: client
+        name: frankerfacez
       cors:
         allow_origins:
           - regex: "^https://([a-z0-9-]+\\.)?twitch\\.tv$"
-        allow_methods:
-          - GET
-          - HEAD
-        allow_headers:
-          - "*"

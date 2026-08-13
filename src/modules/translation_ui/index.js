@@ -90,6 +90,7 @@ export default class TranslationUI extends Module {
 	}
 
 
+	/** @returns {Object} */
 	getData() {
 		this.i18n.loadStrings();
 

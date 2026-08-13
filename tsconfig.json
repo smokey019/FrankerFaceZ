@@ -18,7 +18,15 @@
 		"noImplicitThis": true,
 		"noImplicitReturns": false,
 		"moduleResolution": "Bundler",
-		"importsNotUsedAsValues": "error",
+		"verbatimModuleSyntax": true,
+		"types": [
+			"webpack-env",
+			"chrome",
+			"crypto-js",
+			"js-cookie",
+			"safe-regex",
+			"vue-clickaway"
+		],
 		"allowSyntheticDefaultImports": true,
 		"noImplicitAny": true,
 		"paths": {

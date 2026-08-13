@@ -6,7 +6,7 @@
 // ============================================================================
 
 import Module from 'utilities/module';
-import {get} from 'utilities/object';
+import {get, sleep} from 'utilities/object';
 import merge from 'utilities/graphql';
 import { FFZEvent } from 'utilities/events';
 
@@ -77,7 +77,7 @@ export default class Apollo extends Module {
 		return printer;
 	}
 
-	onEnable() {
+	async onEnable(tries = 0) {
 		// TODO: Come up with a better way to await something existing.
 		let client = this.client;
 
@@ -103,8 +103,15 @@ export default class Apollo extends Module {
 			this.client = client;
 		}
 
-		if ( ! client )
-			return new Promise(() => this.onEnable(), 50);
+		if ( ! client ) {
+			if ( tries >= 60 ) {
+				this.log.error('Unable to locate the Apollo client. GQL integration will be unavailable.');
+				return;
+			}
+
+			await sleep(tries < 20 ? 50 : 500);
+			return this.onEnable(tries + 1);
+		}
 
 		// Register middleware so that we can intercept requests.
 		if ( ! this.client.link || ! this.client.queryManager || ! this.client.queryManager.link ) {

@@ -73,6 +73,7 @@ export default class AddonManager extends Module<'addons'> {
 	versions: Record<string, string>;
 
 	private _loader?: Promise<void>;
+	private _cdn_data?: Promise<unknown>;
 
 	constructor(name?: string, parent?: GenericModule) {
 		super(name, parent);
@@ -94,6 +95,11 @@ export default class AddonManager extends Module<'addons'> {
 		this.versions = {};
 
 		this.load_tracker.schedule('chat-data', 'addon-initial');
+
+		// The add-on directory doesn't depend on settings, so fetch it
+		// immediately rather than waiting for the provider to be ready.
+		// fetchJSON resolves null on failure and never rejects.
+		this._cdn_data = fetchJSON(`${SERVER_OR_EXT}/addons.json?_=${getBuster(300)}`);
 	}
 
 	onLoad() {
@@ -217,7 +223,7 @@ export default class AddonManager extends Module<'addons'> {
 
 	async loadAddonData() {
 		const [cdn_data, local_data] = await Promise.all([
-			fetchJSON(`${SERVER_OR_EXT}/addons.json?_=${getBuster(30)}`),
+			this._cdn_data ?? fetchJSON(`${SERVER_OR_EXT}/addons.json?_=${getBuster(300)}`),
 
 			// Do not attempt to load local add-ons if using the extension, as
 			// loading external code is against the policy of basically everyone.
@@ -575,7 +581,7 @@ export default class AddonManager extends Module<'addons'> {
 		document.head.appendChild(createElement('script', {
 			id: `ffz-loaded-addon-${addon.id}`,
 			type: 'text/javascript',
-			src: addon.src || `${addon.dev ? 'https://localhost:8001/script' : SERVER_OR_EXT}/addons/${addon.id}/script.js?_=${getBuster(30)}`,
+			src: addon.src || `${addon.dev ? 'https://localhost:8001/script' : SERVER_OR_EXT}/addons/${addon.id}/script.js?_=${addon.dev ? getBuster() : (addon.version || getBuster(300))}`,
 			crossorigin: 'anonymous'
 		}));
 

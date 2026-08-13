@@ -74,7 +74,10 @@ export default class CompatEmoteMenu extends Module {
 		if ( delay >= 60000 )
 			return null;
 
-		await sleep(100);
-		return this.findEmoteMenu(delay + 100);
+		// Poll quickly at first, then back off; the extension usually
+		// loads early if it's installed at all.
+		const step = delay < 2000 ? 100 : 1000;
+		await sleep(step);
+		return this.findEmoteMenu(delay + step);
 	}
 }

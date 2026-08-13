@@ -23,14 +23,16 @@ export default class BTTVCompat extends Module {
 	onEnable() {
 		this.on('core:dom-update', this.handleDomUpdate, this);
 
-		this.hookSettings();
+		this.hookSettings().catch(() => { /* BTTV not present */ });
 	}
 
 	awaitSettings(tries = 0) {
 		if ( ! window.BetterTTV?.settings ) {
 			if ( tries > 100 )
 				return Promise.reject();
-			return sleep(50).then(() => this.awaitSettings(tries + 1));
+			// Poll quickly for the first second, then back off; BTTV can
+			// load slowly, so keep the overall window generous.
+			return sleep(tries > 20 ? 500 : 50).then(() => this.awaitSettings(tries + 1));
 		}
 
 		return window.BetterTTV.settings;

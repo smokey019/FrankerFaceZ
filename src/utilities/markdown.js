@@ -117,6 +117,10 @@ export default async function awaitMD() {
 			linkify: true
 		});
 
+		// linkify-it v6 (markdown-it v15) disables fuzzy links by default;
+		// re-enable so bare domains like "example.com" still auto-link.
+		md.linkify.set({fuzzyLink: true});
+
 		md.use(SettingsLinks);
 		md.use(MILA, {
 			attrs: {

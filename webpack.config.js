@@ -262,6 +262,17 @@ const config = {
 				}
 			},
 			{
+				// linkify-it v6 (via markdown-it) ships ES2021 syntax (??=);
+				// node_modules is otherwise untranspiled, so downlevel it to
+				// keep the bundle parseable at TARGET.
+				test: /\.m?js$/,
+				include: /node_modules[\\/]linkify-it/,
+				loader: 'esbuild-loader',
+				options: {
+					target: TARGET
+				}
+			},
+			{
 				test: /\.(graphql|gql)$/,
 				exclude: /node_modules/,
 				use: [

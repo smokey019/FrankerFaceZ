@@ -1156,6 +1156,8 @@ export default class EmoteMenu extends Module {
 				this.sections = [];
 				this.activeSection = -1;
 
+				this.unmounted = false;
+
 				this.state = {
 					tab: null,
 					active_nav: null,
@@ -1168,6 +1170,7 @@ export default class EmoteMenu extends Module {
 					combineTabs: t.chat.context.get('chat.emote-menu.combine-tabs'),
 					showSearch: t.chat.context.get('chat.emote-menu.show-search'),
 					clearSearch: t.chat.context.get('chat.emote-menu.clear-search'),
+					refreshing: false,
 					hasNewEffects: false,
 					unlockedEffects: t.settings.provider.get('unlocked-effects', []),
 					tone: t.settings.provider.get('emoji-tone', null)
@@ -1207,7 +1210,7 @@ export default class EmoteMenu extends Module {
 				this.pickTone = this.pickTone.bind(this);
 				this.clickTab = this.clickTab.bind(this);
 				this.clickSideNav = this.clickSideNav.bind(this);
-				//this.clickRefresh = this.clickRefresh.bind(this);
+				this.clickRefresh = this.clickRefresh.bind(this);
 				this.handleFilterChange = this.handleFilterChange.bind(this);
 				this.handleKeyDown = this.handleKeyDown.bind(this);
 				this.toggleVisibilityControl = this.toggleVisibilityControl.bind(this);
@@ -1331,6 +1334,7 @@ export default class EmoteMenu extends Module {
 			}
 
 			componentWillUnmount() {
+				this.unmounted = true;
 				this.destroyObserver();
 
 				t.chat.context.off('changed:chat.emotes.animated', this.updateSettingState, this);
@@ -1472,39 +1476,103 @@ export default class EmoteMenu extends Module {
 				}*/
 			}
 
-			/*clickRefresh(event) {
+			clickRefresh(event) {
 				const target = event.currentTarget,
 					tt = target && target._ffz_tooltip;
 
 				if ( tt && tt.hide )
 					tt.hide();
 
+				if ( this.state.refreshing || this.state.loading )
+					return;
+
 				this.setState({
-					loading: true
+					refreshing: true
 				}, async () => {
-					const props = this.props,
-						promises = [],
-						emote_data = props.emote_data,
-						channel_data = props.channel_data;
+					// Wait for the FFZ / add-on reload to report completion.
+					// The load tracker abandons stalled loads after 15
+					// seconds, but only fires a completion event when a load
+					// succeeded, so we need our own fallback timer. Removing
+					// a listener from inside its own dispatch throws, so the
+					// event path relies on once() for removal and only the
+					// timer path (which can never run mid-dispatch) calls off.
+					const ffz_done = new Promise(resolve => {
+						let timer = null;
+						const handler = () => {
+							clearTimeout(timer);
+							resolve();
+						};
+						timer = setTimeout(() => {
+							t.off('load_tracker:complete:chat-data', handler);
+							resolve();
+						}, 20000);
+						t.once('load_tracker:complete:chat-data', handler);
+					});
 
-					if ( emote_data )
-						promises.push(emote_data.refetch())
+					// Reload FFZ and add-on data (global sets, room sets,
+					// badges). The menu rebuilds from the resulting update
+					// events as the new data arrives.
+					t.emit('chat:reload-data');
 
-					if ( channel_data )
+					const promises = [],
+						emote_data = this.props.emote_data,
+						channel_data = this.props.channel_data;
+
+					if ( emote_data?.refetch )
+						promises.push(emote_data.refetch());
+
+					if ( channel_data?.refetch )
 						promises.push(channel_data.refetch());
 
-					await Promise.all(promises);
+					try {
+						await Promise.all(promises);
+					} catch(err) {
+						t.log.warn('Error refreshing Twitch emote data.', err);
+					}
 
-					const es = props.emote_data && props.emote_data.emoteSets,
-						sets = es && es.length ? new Set(es.map(x => parseInt(x.id, 10))) : new Set;
+					await ffz_done;
 
-					const data = await t.getData(sets, true);
+					if ( this.unmounted )
+						return;
+
+					const es = this.props.emote_data?.emoteSets,
+						sets = Array.isArray(es) ? new Set(es.map(x => x.id)) : new Set;
+
+					let data = null;
+					try {
+						data = await t.getData(sets, true);
+					} catch(err) {
+						t.log.warn('Error refreshing additional emote menu data.', err);
+					}
+
+					if ( this.unmounted )
+						return;
+
+					// If we didn't get data, or the props are in a bad state,
+					// or another load raced us, keep the state we already
+					// have rather than committing a degraded rebuild.
+					if ( ! data || this.props.loading || this.props.error || this.state.loading ) {
+						this.setState({refreshing: false});
+						return;
+					}
+
+					// If the emote sets changed while we were fetching, let
+					// the normal loadData flow take over rather than
+					// rebuilding from a mismatched set list.
+					const es_now = this.props.emote_data?.emoteSets,
+						sets_now = Array.isArray(es_now) ? new Set(es_now.map(x => x.id)) : new Set;
+
+					if ( ! set_equals(sets, sets_now) ) {
+						this.setState({refreshing: false}, () => this.loadData());
+						return;
+					}
+
 					this.setState(this.filterState(this.state.filter, this.buildState(
 						this.props,
-						Object.assign({}, this.state, {set_sets: sets, set_data: data, loading: false})
+						Object.assign({}, this.state, {refreshing: false, set_sets: sets, set_data: data})
 					)));
 				});
-			}*/
+			}
 
 			toggleVisibilityControl() {
 				this.setState(this.filterState(this.state.filter, this.state, ! this.state.visibility_control));
@@ -2690,6 +2758,7 @@ export default class EmoteMenu extends Module {
 					return null;
 
 				const loading = this.state.loading || this.props.loading,
+					refreshing = this.state.refreshing,
 					padding = this.state.reducedPadding, //t.chat.context.get('chat.emote-menu.reduced-padding'),
 					no_tabs = this.state.combineTabs; //t.chat.context.get('chat.emote-menu.combine-tabs');
 
@@ -2806,6 +2875,17 @@ export default class EmoteMenu extends Module {
 												</button>);
 											})}
 											{no_tabs && <div class="tw-mg-y-1 tw-mg-x-05 tw-border-t" />}
+											{no_tabs && (<button
+												class="tw-mg-y-1 tw-c-text-inherit tw-interactable ffz-interactive ffz-interactable--hover-enabled ffz-interactable--default tw-block tw-full-width ffz-tooltip ffz-tooltip--no-mouse"
+												disabled={refreshing}
+												data-title={t.i18n.t('emote-menu.refresh', 'Refresh Emotes')}
+												data-tooltip-side="left"
+												onClick={this.clickRefresh}
+											>
+												<div class={`tw-align-items-center tw-flex tw-justify-content-center ${padding ? '' : 'tw-pd-x-05 '}tw-pd-y-05`}>
+													<figure class={`ffz-emote-picker--nav-icon ffz-i-arrows-cw${refreshing ? ' ffz--rotate' : ''}`} />
+												</div>
+											</button>)}
 											{no_tabs && (<button
 												class="tw-mg-y-1 tw-c-text-inherit tw-interactable ffz-interactive ffz-interactable--hover-enabled ffz-interactable--default tw-block tw-full-width ffz-tooltip ffz-tooltip--no-mouse"
 												data-title={t.i18n.t('emote-menu.settings', 'Open Settings')}
@@ -2939,6 +3019,19 @@ export default class EmoteMenu extends Module {
 										<div class="emote-picker-tab-item tw-relative">
 											<button
 												class="ffz-tooltip tw-block tw-full-width ffz-interactable ffz-interactable--hover-enabled ffz-interactable--default tw-interactive"
+												disabled={loading || refreshing}
+												data-tooltip-type="html"
+												data-title={t.i18n.t('emote-menu.refresh', 'Refresh Emotes')}
+												onClick={this.clickRefresh}
+											>
+												<div class="tw-inline-flex tw-pd-x-1 tw-pd-y-05 ffz-font-size-4">
+													<figure class={`ffz-i-arrows-cw${refreshing ? ' ffz--rotate' : ''}`} />
+												</div>
+											</button>
+										</div>
+										<div class="emote-picker-tab-item tw-relative">
+											<button
+												class="ffz-tooltip tw-block tw-full-width ffz-interactable ffz-interactable--hover-enabled ffz-interactable--default tw-interactive"
 												data-tooltip-type="html"
 												data-title={t.i18n.t('emote-menu.settings', 'Open Settings')}
 												onClick={this.clickSettings}
@@ -3060,7 +3153,7 @@ export default class EmoteMenu extends Module {
 	}
 
 
-	async getData(sets, force, cursor = null, nodes = []) {
+	async getData(sets, force) {
 		if ( this._data ) {
 			if ( ! force && set_equals(sets, this._data_sets) )
 				return this._data;
@@ -3070,35 +3163,36 @@ export default class EmoteMenu extends Module {
 			}
 		}
 
-		let data;
-		try {
-			data = await this.apollo.client.query({
-				query: SUB_STATUS,
-				variables: {
-					first: 75,
-					after: cursor,
-					criteria: {
-						filter: 'ALL'
-					}
-				},
-				fetchPolicy: force ? 'network-only' : 'cache-first'
-			});
+		let cursor = null,
+			nodes = [],
+			has_next_page = true;
 
-		} catch(err) {
-			this.log.warn('Error fetching additional emote menu data.', err);
-			return this._data = null;
+		while (has_next_page) {
+			let data;
+			try {
+				data = await this.apollo.client.query({ // eslint-disable-line no-await-in-loop
+					query: SUB_STATUS,
+					variables: {
+						first: 75,
+						after: cursor,
+						criteria: {
+							filter: 'ALL'
+						}
+					},
+					fetchPolicy: force ? 'network-only' : 'cache-first'
+				});
+
+			} catch(err) {
+				this.log.warn('Error fetching additional emote menu data.', err);
+				return null;
+			}
+
+			nodes = nodes.concat(get('data.currentUser.subscriptionBenefits.edges.@each.node', data));
+			has_next_page = get('data.currentUser.subscriptionBenefits.pageInfo.hasNextPage', data);
+			cursor = get('data.currentUser.subscriptionBenefits.edges.@last.cursor', data);
 		}
 
-		const out = {},
-			curr_nodes = get('data.currentUser.subscriptionBenefits.edges.@each.node', data),
-			has_next_page = get('data.currentUser.subscriptionBenefits.pageInfo.hasNextPage', data),
-			curr_cursor = get('data.currentUser.subscriptionBenefits.edges.@last.cursor', data);
-
-		nodes = nodes.concat(curr_nodes);
-
-		if (has_next_page) {
-			return this.getData(sets, force, curr_cursor, nodes);
-		}
+		const out = {};
 
 		if ( nodes && nodes.length )
 			for(const node of nodes) {
@@ -3118,12 +3212,39 @@ export default class EmoteMenu extends Module {
 				};
 			}
 
-		this._data_sets = sets;
-		return this._data = out;
+		return out;
 	}
 }
 
 
-EmoteMenu.getData = once(EmoteMenu.getData);
-EmoteMenu.getFFZSubData = once(EmoteMenu.getFFZSubData);
-EmoteMenu.getFFZSubPrices = once(EmoteMenu.getFFZSubPrices);
+// getData gets custom single-flight handling rather than once(), which
+// ignores arguments: a forced call must never be satisfied by an
+// in-flight unforced (possibly cache-first) call. Only the most recent
+// flight commits to the module-level cache, so a superseded flight that
+// settles late can't stomp fresher data.
+const raw_getData = EmoteMenu.prototype.getData;
+EmoteMenu.prototype.getData = function(sets, force) {
+	if ( this._data_flight && (! force || this._data_flight_forced) )
+		return this._data_flight;
+
+	const flight = raw_getData.call(this, sets, force)
+		.then(result => {
+			if ( this._data_flight === flight ) {
+				this._data_flight = null;
+				this._data = result;
+				this._data_sets = result ? sets : null;
+			}
+			return result;
+		}, err => {
+			if ( this._data_flight === flight )
+				this._data_flight = null;
+			throw err;
+		});
+
+	this._data_flight = flight;
+	this._data_flight_forced = !! force;
+	return flight;
+}
+
+EmoteMenu.prototype.getFFZSubData = once(EmoteMenu.prototype.getFFZSubData);
+EmoteMenu.prototype.getFFZSubPrices = once(EmoteMenu.prototype.getFFZSubPrices);

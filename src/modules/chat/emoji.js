@@ -6,7 +6,7 @@
 
 import Module from 'utilities/module';
 import {SERVER} from 'utilities/constants';
-import {has} from 'utilities/object';
+import {has, sleep} from 'utilities/object';
 import { getBuster } from 'utilities/time';
 
 import splitter from 'emoji-regex';
@@ -184,7 +184,15 @@ export default class Emoji extends Module {
 			names = {},
 			chars = new Map;
 
+		// Hydrating ~1800 emoji in one pass is a noticeable main-thread
+		// block during startup; yield between chunks. The finished tables
+		// are still published atomically below.
+		let processed = 0;
+
 		for(const raw of data.e) {
+			if ( ++processed % 250 === 0 )
+				await sleep(0); // eslint-disable-line no-await-in-loop
+
 			const emoji = Object.assign(hydrate_emoji(raw.slice(4)), {
 				category: cats[raw[0]],
 				sort: raw[1],

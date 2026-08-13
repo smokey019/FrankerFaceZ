@@ -487,6 +487,12 @@ export default class Emotes extends Module {
 		// several addons register filters in a burst at startup.
 		this._updateFilteredDebounced = debounce(() => this.updateFiltered(), 150);
 
+		// Batched per-set CSS rebuilds and :loaded emissions, so live
+		// emote add/remove bursts don't do O(set) work per emote.
+		this._pending_set_css = new Set;
+		this._pending_set_loaded = new Set;
+		this._set_update_timer = null;
+
 		this.settings.add('chat.emotes.source-priorities', {
 			default: null,
 			ui: {
@@ -1040,23 +1046,60 @@ export default class Emotes extends Module {
 			set.disabled_count = fcount;
 
 			// Update the CSS for the set.
-			const css = [];
-			for(const em of Object.values(emotes)) {
-				const emote_css = this.generateEmoteCSS(em);
-				if ( emote_css?.length )
-					css.push(emote_css);
-			}
-
-			if ( this.style && (css.length || set.css) )
-				this.style.set(`es--${set.id}`, css.join('') + (set.css || ''));
-			else if ( css.length )
-				set.pending_css = css.join('');
+			this.rebuildSetCSS(set.id);
 
 			// And emit an event because this emote set changed.
 			this.emit(':loaded', set.id, set);
 		}
 
 		// TODO: Summary, maybe? Or update chat? Who knows?
+	}
+
+	rebuildSetCSS(set_id) {
+		const set = this.emote_sets[set_id];
+		if ( ! set || ! set.emotes )
+			return;
+
+		const css = [];
+		for(const em of Object.values(set.emotes)) {
+			const emote_css = this.generateEmoteCSS(em);
+			if ( emote_css && emote_css.length )
+				css.push(emote_css);
+		}
+
+		if ( this.style && (css.length || set.css) )
+			this.style.set(`es--${set_id}`, css.join('') + (set.css || ''));
+		else if ( css.length )
+			set.pending_css = css.join('');
+	}
+
+	scheduleSetUpdate(set_id, needs_css = false) {
+		// Set data has already been mutated; new messages must tokenize
+		// with fresh data immediately, so clear the memoized emote maps
+		// here rather than waiting for the batched :loaded event.
+		this._emote_map_cache.clear();
+
+		if ( needs_css )
+			this._pending_set_css.add(set_id);
+		this._pending_set_loaded.add(set_id);
+
+		if ( ! this._set_update_timer )
+			this._set_update_timer = setTimeout(() => this.flushSetUpdates(), 50);
+	}
+
+	flushSetUpdates() {
+		this._set_update_timer = null;
+
+		for(const set_id of this._pending_set_css)
+			this.rebuildSetCSS(set_id);
+		this._pending_set_css.clear();
+
+		for(const set_id of this._pending_set_loaded) {
+			const set = this.emote_sets[set_id];
+			if ( set )
+				this.emit(':loaded', set_id, set);
+		}
+		this._pending_set_loaded.clear();
 	}
 
 
@@ -2366,22 +2409,12 @@ export default class Emotes extends Module {
 		}
 
 		// Now we need to update the CSS. If we had old emote CSS, then we
-		// will need to totally rebuild the CSS.
+		// will need to totally rebuild the CSS (batched, since PubSub and
+		// addons feed us emotes one at a time).
 		const style_key = `es--${set_id}`;
 
-		// Rebuild the full CSS if we have an old emote.
 		if ( old_css && old_css.length ) {
-			const css = [];
-			for(const em of Object.values(set.emotes)) {
-				const emote_css = this.generateEmoteCSS(em);
-				if ( emote_css && emote_css.length )
-					css.push(emote_css);
-			}
-
-			if ( this.style && (css.length || set.css) )
-				this.style.set(style_key, css.join('') + (set.css || ''));
-			else if ( css.length )
-				set.pending_css = css.join('');
+			this.scheduleSetUpdate(set_id, true);
 
 		} else if ( ! is_disabled ) {
 			// If there wasn't an old emote, only add our CSS if the emote
@@ -2395,8 +2428,8 @@ export default class Emotes extends Module {
 			}
 		}
 
-		// Send a loaded event because this emote set changed.
-		this.emit(':loaded', set_id, set);
+		// Send a batched loaded event because this emote set changed.
+		this.scheduleSetUpdate(set_id);
 
 		// Return the processed emote object.
 		return processed;
@@ -2425,7 +2458,6 @@ export default class Emotes extends Module {
 			return;
 
 		const emote_css = this.generateEmoteCSS(emote);
-		const css = (emote_css && emote_css.length) ? [] : null;
 
 		// Rebuild the emotes object to avoid gaps.
 		const new_emotes = {};
@@ -2437,27 +2469,14 @@ export default class Emotes extends Module {
 
 			new_emotes[em.id] = em;
 			count++;
-
-			if ( css != null) {
-				const em_css = this.generateEmoteCSS(em);
-				if ( em_css && em_css.length )
-					css.push(em_css);
-			}
 		}
 
 		set.emotes = new_emotes;
 		set.count = count;
 
-		if ( css != null ) {
-			const style_key = `es--${set_id}`;
-			if ( this.style && (css.length || set.css) )
-				this.style.set(style_key, css.join('') + (set.css || ''));
-			else if ( css.length )
-				set.pending_css = css.join('');
-		}
-
-		// Send a loaded event because this emote set changed.
-		this.emit(':loaded', set_id, set);
+		// Send a batched loaded event (with a CSS rebuild if the removed
+		// emote had CSS) because this emote set changed.
+		this.scheduleSetUpdate(set_id, !!(emote_css && emote_css.length));
 
 		// Return the removed emote.
 		return emote;

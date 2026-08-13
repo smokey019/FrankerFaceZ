@@ -804,10 +804,15 @@ export default class SettingsManager extends Module<'settings', SettingsEvents> 
 		}
 
 		// If there's a provider that has content, then use it.
-		for(const [key, provider] of providers) {
-			if ( await provider.hasContent(this) ) // eslint-disable-line no-await-in-loop
+		// Check all providers concurrently; select in priority order.
+		const results = await Promise.all(providers.map(([key, provider]) =>
+			Promise.resolve(provider.hasContent(this))
+				.then(has_content => has_content ? key : null, () => null)
+		));
+
+		for(const key of results)
+			if ( key )
 				return key;
-		}
 
 		// Select the first provider that allows itself to be the default.
 		for(const [key, provider] of providers) {

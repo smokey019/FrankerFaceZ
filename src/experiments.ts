@@ -246,6 +246,22 @@ export default class ExperimentManager extends Module<'experiments', ExperimentE
 	}
 
 	async onLoad() {
+		// If we have last-known experiment data, use it and refresh in the
+		// background so boot doesn't block on a network round-trip. The
+		// refresh's change-detection loop emits :changed for any deltas.
+		if ( ! DEBUG ) {
+			let cached: Record<keyof ExperimentTypeMap, FFZExperimentData> | null = null;
+			try {
+				cached = JSON.parse(localStorage.getItem('FFZ:experiment-data') ?? 'null');
+			} catch(err) { /* no-op */ }
+
+			if ( cached && typeof cached === 'object' && ! Array.isArray(cached) && Object.keys(cached).length ) {
+				this.experiments = cached;
+				this.loadExperiments().catch(err => this.log.warn('Background experiment refresh failed.', err));
+				return;
+			}
+		}
+
 		await this.loadExperiments();
 	}
 
@@ -268,6 +284,11 @@ export default class ExperimentManager extends Module<'experiments', ExperimentE
 			return;
 
 		this.experiments = data;
+
+		if ( ! DEBUG )
+			try {
+				localStorage.setItem('FFZ:experiment-data', JSON.stringify(data));
+			} catch(err) { /* no-op */ }
 
 		const old_cache = this.cache;
 		this.cache = new Map;

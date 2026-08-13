@@ -1804,10 +1804,62 @@ other {# messages were deleted by a moderator.}
 				msg._ffz_message = null;
 		}
 
-		this.ChatLine.forceUpdate();
-		this.ExtensionLine.forceUpdate();
-		this.WhisperLine.forceUpdate();
+		// Re-rendering every line in one go is a visible jank spike with
+		// large scrollbacks; spread the forceUpdate calls across frames.
+		// The cleared caches above stay atomic, so a line rendered early
+		// by any other trigger simply re-tokenizes with fresh state.
+		this._scheduleChunkedUpdate(this.ChatLine);
+		this._scheduleChunkedUpdate(this.ExtensionLine);
+		this._scheduleChunkedUpdate(this.WhisperLine);
 
 		this.emit('chat:updated-lines');
+	}
+
+	_scheduleChunkedUpdate(wrapper) {
+		if ( ! this._pending_updates ) {
+			this._pending_updates = new Set;
+			this._pending_wrappers = new Map;
+		}
+
+		// Newest lines mount last; update them first so visible chat
+		// refreshes before scrollback.
+		const instances = Array.from(wrapper.instances);
+		for(let i = instances.length - 1; i >= 0; i--) {
+			this._pending_updates.add(instances[i]);
+			this._pending_wrappers.set(instances[i], wrapper);
+		}
+
+		if ( ! this._update_frame )
+			this._update_frame = requestAnimationFrame(() => this._processChunkedUpdate());
+	}
+
+	_processChunkedUpdate() {
+		this._update_frame = null;
+
+		const CHUNK = 25;
+		let i = 0;
+
+		for(const inst of this._pending_updates) {
+			if ( i++ >= CHUNK )
+				break;
+
+			this._pending_updates.delete(inst);
+			const wrapper = this._pending_wrappers.get(inst);
+			this._pending_wrappers.delete(inst);
+
+			// Skip instances that unmounted since scheduling.
+			if ( ! wrapper || ! wrapper.instances.has(inst) )
+				continue;
+
+			try {
+				inst.forceUpdate();
+				this.fine.emit('site:dom-update', wrapper.name, inst);
+			} catch(err) {
+				this.log.error(`An error occurred when calling forceUpdate on an instance of ${wrapper.name}`, err);
+			}
+		}
+
+		if ( this._pending_updates.size )
+			this._update_frame = requestAnimationFrame(() => this._processChunkedUpdate());
 	}
 }

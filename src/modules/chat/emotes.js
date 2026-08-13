@@ -479,6 +479,10 @@ export default class Emotes extends Module {
 		this._set_refs = {};
 		this._set_timers = {};
 
+		// Memoized name->emote maps from getEmotes, keyed by the joined
+		// set ID list. Cleared whenever any set's contents change.
+		this._emote_map_cache = new Map;
+
 		this.settings.add('chat.emotes.source-priorities', {
 			default: null,
 			ui: {
@@ -783,6 +787,14 @@ export default class Emotes extends Module {
 					}
 				}
 		}
+
+		// Invalidate the memoized emote maps whenever set contents change.
+		// Membership changes don't need events here; they change the
+		// cache key itself (see getEmotes).
+		const clearEmoteMapCache = () => this._emote_map_cache.clear();
+		this.on(':loaded', clearEmoteMapCache);
+		this.on(':unloaded', clearEmoteMapCache);
+		this.on(':update-priorities', clearEmoteMapCache);
 
 		this.on('pubsub:command:follow_sets', this.updateFollowSets, this);
 
@@ -1883,13 +1895,29 @@ export default class Emotes extends Module {
 	}
 
 	getEmotes(user_id, user_login, room_id, room_login) {
+		// This is called for every tokenized message, so memoize the
+		// merged map per distinct set list. Membership changes alter
+		// the key; content changes clear the cache (see onEnable).
+		const set_ids = this.getSetIDs(user_id, user_login, room_id, room_login),
+			key = set_ids.join(',');
+
+		const cached = this._emote_map_cache.get(key);
+		if ( cached )
+			return cached;
+
 		const emotes = {};
-		for(const emote_set of this.getSets(user_id, user_login, room_id, room_login))
+		for(const set_id of set_ids) {
+			const emote_set = this.emote_sets[set_id];
 			if ( emote_set && emote_set.emotes )
 				for(const emote of Object.values(emote_set.emotes) )
 					if ( emote && ! has(emotes, emote.name) )
 						emotes[emote.name] = emote;
+		}
 
+		if ( this._emote_map_cache.size >= 40 )
+			this._emote_map_cache.clear();
+
+		this._emote_map_cache.set(key, emotes);
 		return emotes;
 	}
 

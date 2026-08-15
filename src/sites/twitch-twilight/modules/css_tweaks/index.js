@@ -31,6 +31,11 @@ const CLASSES = {
 	'prime-offers': '.top-nav__prime',
 	'discover-luna': '.top-nav__external-link[data-a-target="try-presto-link"]',
 
+	// The portal root Twitch renders its promotional sticky footer into. The
+	// element's styled-components classes are build hashes and its contents
+	// change with every ad campaign, so the root's id is the only stable hook.
+	'sticky-footer': '#twilight-sticky-footer-root,footer[id$="-sticky-footer-root"]',
+
 	'subtember': '.subtember-gradient',
 
 	'player-gain-volume': '.video-player__container[data-compressed="true"] .volume-slider__slider-container:not(.ffz--player-gain)',
@@ -390,6 +395,17 @@ export default class CSSTweaks extends Module {
 			changed: val => this.toggleHide('discover-luna', val)
 		});
 
+		this.settings.add('layout.hide-sticky-footer', {
+			default: true,
+			ui: {
+				path: 'Appearance > Layout >> Footer',
+				title: 'Hide the sticky footer banner.',
+				description: 'Twitch uses the sticky footer at the bottom of the page for promotional banners, such as advertisements for Twitch Turbo or partner offers. This hides the entire footer, so any non-promotional notice Twitch places there would be hidden as well.',
+				component: 'setting-check-box'
+			},
+			changed: val => this.toggleHide('sticky-footer', val)
+		});
+
 		// Chat
 
 		this.settings.add('whispers.show', {
@@ -524,6 +540,7 @@ export default class CSSTweaks extends Module {
 		//this.toggleHide('side-rec-friends', !this.settings.get('layout.side-nav.show-rec-friends'));
 		this.toggleHide('side-offline-channels', this.settings.get('layout.side-nav.hide-offline'));
 		this.toggleHide('discover-luna', this.settings.get('layout.hide-discover-luna'));
+		this.toggleHide('sticky-footer', this.settings.get('layout.hide-sticky-footer'));
 		this.toggleHide('prime-offers', !this.settings.get('layout.prime-offers'));
 		//this.toggleHide('top-discover', !this.settings.get('layout.discover'));
 		this.toggle('hide-unfollow-button', this.settings.get('channel.hide-unfollow'));

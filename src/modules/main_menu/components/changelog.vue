@@ -18,6 +18,9 @@
 			<h3 v-else-if="addons" class="tw-mg-b-1 ffz-font-size-3">
 				{{ t('setting.add_ons.changelog.title', 'Add-Ons Changelog') }}
 			</h3>
+			<h3 v-else-if="fork" class="tw-mg-b-1 ffz-font-size-3">
+				{{ t('home.changelog.fork', 'Fork Changelog') }}
+			</h3>
 			<h3 v-else class="tw-mg-b-1 ffz-font-size-3">
 				{{ t('home.changelog', 'Changelog') }}
 			</h3>
@@ -152,7 +155,8 @@ import {get} from 'utilities/object';
 const TITLE_MATCH = /^(.+?)?\s*v?(\d+\.\d+\.\d+(?:\-[a-z0-9-]+)?)$/i,
 	SETTING_REGEX = /\]\(~([^)]+)\)/g,
 	CHANGE_REGEX = /^\*\s*([^:]+?):\s*(.+)$/i,
-	ISSUE_REGEX = /(^|\s)#(\d+)\b/g;
+	ISSUE_REGEX = /(^|\s)#(\d+)\b/g,
+	TRAILER_REGEX = /^(?:co-authored-by|signed-off-by|reviewed-by|acked-by|tested-by|reported-by|suggested-by|helped-by|cc):/i;
 
 
 function linkify(text, repo) {
@@ -161,7 +165,7 @@ function linkify(text, repo) {
 	});
 
 	return text.replace(ISSUE_REGEX, (_, space, number) => {
-		return `${space}[#${number}](https://github.com/FrankerFaceZ/${repo}/issues/${number})`;
+		return `${space}[#${number}](https://github.com/${repo}/issues/${number})`;
 	});
 }
 
@@ -170,11 +174,18 @@ export default {
 	props: ['item', 'context'],
 
 	data() {
+		const addons = this.item.addons,
+			fork = this.item.fork;
+
 		return {
 			error: false,
 			addon: this.item.addon,
-			addons: this.item.addons,
-			nonversioned: false,
+			addons,
+			fork,
+			repo: this.item.repo || (addons ? 'FrankerFaceZ/add-ons' : 'FrankerFaceZ/FrankerFaceZ'),
+			// The fork has no version-tagged release commits, so show the
+			// individual commits by default or the list renders empty.
+			nonversioned: !! fork,
 			loading: false,
 			more: true,
 			commits: []
@@ -199,32 +210,55 @@ export default {
 					sections = {},
 					description = [];
 
-				if ( /\bskiplog\b/i.test(input) && ! this.nonversion )
+				if ( /\bskiplog\b/i.test(input) && ! this.nonversioned )
 					continue;
 
-				const lines = input.split(/\r?\n/),
-					first = lines.shift(),
+				const all_lines = input.split(/\r?\n/),
+					first = all_lines.shift(),
+					// Trailers aren't part of the notes, and would otherwise be
+					// appended to whichever change entry came last.
+					lines = all_lines.filter(line => ! TRAILER_REGEX.test(line.trim())),
 					match = first ? TITLE_MATCH.exec(first) : null;
+
+				// Fork commits aren't tagged with a release version -- each one
+				// carries its own notes -- so use the summary line as the entry
+				// title and read the body for change lines. A summary that's
+				// already a change line stays in the body to be parsed there.
+				const summary = this.fork && ! match && first && ! CHANGE_REGEX.test(first)
+					? first.trim()
+					: null;
 
 				const date = new Date(commit.commit.author.date),
 					active = commit.sha === window.FrankerFaceZ.version_info.commit,
-					has_content = lines.length && match;
+					has_content = lines.length && (match || summary || this.fork);
 
-				if ( ! this.nonversion && ! has_content )
+				if ( ! this.nonversioned && ! has_content )
 					continue;
+
+				// Keep the summary out of the body only when it's being used as
+				// the title, otherwise it renders twice.
+				const body = (has_content && match) || summary
+					? lines
+					: [first, ...lines];
 
 				let last_bit = null;
 
 				if ( match ) {
 					title = match[1];
 					version = match[2];
-				}
+				} else if ( summary )
+					title = summary;
 
 				if ( has_content )
-					for(const line of lines) {
+					for(const line of body) {
 						const trimmed = line.trim();
 						if ( ! trimmed.length ) {
-							if ( ! last_bit && description.length )
+							// A blank line closes the current change entry. Without
+							// this, prose written after the notes gets appended to the
+							// last one rather than read as description.
+							if ( last_bit )
+								last_bit = null;
+							else if ( description.length )
 								description.push(line);
 							continue;
 						}
@@ -243,10 +277,8 @@ export default {
 						}
 					}
 
-				else {
-					lines.unshift(first);
-					description = lines;
-				}
+				else
+					description = body;
 
 				let message = description.join('\n').trim();
 
@@ -260,7 +292,7 @@ export default {
 
 					segments.push({
 						key,
-						value: linkify(bit, this.addons ? 'add-ons' : 'frankerfacez')
+						value: linkify(bit, this.repo)
 					});
 				}
 
@@ -350,7 +382,7 @@ export default {
 
 			this.loading = true;
 
-			const url = new URL(`https://api.github.com/repos/frankerfacez/${this.addons ? 'add-ons' : 'frankerfacez'}/commits`);
+			const url = new URL(`https://api.github.com/repos/${this.repo}/commits`);
 			if ( until )
 				url.searchParams.append('until', until);
 

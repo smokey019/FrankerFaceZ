@@ -200,6 +200,14 @@ export default class MainMenu extends Module {
 			getFFZ: () => this
 		});
 
+		this.settings.addUI('fork-changelog', {
+			path: 'Home > Fork Changelog @{"profile_warning": false}',
+			component: 'changelog',
+			fork: true,
+			repo: 'smokey019/FrankerFaceZ',
+			getFFZ: () => this
+		});
+
 		this.settings.addUI('addon-changelog', {
 			path: 'Add-Ons > Changelog @{"sort": -1000, "profile_warning": false, "hide_children": true}',
 			component: 'changelog',

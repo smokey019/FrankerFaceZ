@@ -31,6 +31,13 @@ const CLASSES = {
 	'prime-offers': '.top-nav__prime',
 	'discover-luna': '.top-nav__external-link[data-a-target="try-presto-link"]',
 
+	// Twitch advertises timed events in the top nav. The data-a-target and the
+	// directory slug are specific to each campaign and die with it, so key on the
+	// event directory the link points at to catch whatever replaces this one.
+	// The link sits in wrapper divs with hashed classes, so match the item
+	// wrapper too or hiding the link alone leaves an empty slot in the nav.
+	'top-nav-event': '.navigation-link[href^="/directory/event/"],div:has(> div > .navigation-link[href^="/directory/event/"])',
+
 	// The portal root Twitch renders its promotional sticky footer into. The
 	// element's styled-components classes are build hashes and its contents
 	// change with every ad campaign, so the root's id is the only stable hook.
@@ -395,6 +402,17 @@ export default class CSSTweaks extends Module {
 			changed: val => this.toggleHide('discover-luna', val)
 		});
 
+		this.settings.add('layout.hide-top-nav-event', {
+			default: false,
+			ui: {
+				path: 'Appearance > Layout >> Top Navigation',
+				title: 'Hide event promotion links.',
+				description: 'Twitch advertises timed events, such as Pokémon Worlds, as links in the top navigation. This hides every top navigation link pointing at an event directory, including ones for future events, so an event you actually follow would be hidden too.',
+				component: 'setting-check-box'
+			},
+			changed: val => this.toggleHide('top-nav-event', val)
+		});
+
 		this.settings.add('layout.hide-sticky-footer', {
 			default: true,
 			ui: {
@@ -540,6 +558,7 @@ export default class CSSTweaks extends Module {
 		//this.toggleHide('side-rec-friends', !this.settings.get('layout.side-nav.show-rec-friends'));
 		this.toggleHide('side-offline-channels', this.settings.get('layout.side-nav.hide-offline'));
 		this.toggleHide('discover-luna', this.settings.get('layout.hide-discover-luna'));
+		this.toggleHide('top-nav-event', this.settings.get('layout.hide-top-nav-event'));
 		this.toggleHide('sticky-footer', this.settings.get('layout.hide-sticky-footer'));
 		this.toggleHide('prime-offers', !this.settings.get('layout.prime-offers'));
 		//this.toggleHide('top-discover', !this.settings.get('layout.discover'));

@@ -125,11 +125,13 @@ const COPY_PATTERNS = EXT_BUILD
 		{
 			from: './extension/manifest.json',
 			to: path.join(EXT_ROOT, 'manifest.json'),
-			// Chrome only accepts 1-4 dot-separated integers as a version, so
-			// use the fork's build number as the fourth component.
+			// Chrome only accepts 1-4 dot-separated integers (0-65535 each) as a
+			// version, compared numerically, so use the fork's build number as the
+			// fourth component. The offset keeps it above versions already
+			// published to the Web Store (4.82.0.931) and below the 65535 limit.
 			transform: content => {
 				const manifest = JSON.parse(content.toString());
-				manifest.version = [VERSION.major, VERSION.minor, VERSION.patch, ...(build_number ? [build_number] : [])].join('.');
+				manifest.version = [VERSION.major, VERSION.minor, VERSION.patch, ...(build_number ? [1000 + Number(build_number)] : [])].join('.');
 				manifest.version_name = `${manifest.version} (${commit_hash.slice(0, 7)})`;
 				return JSON.stringify(manifest, null, 2);
 			}

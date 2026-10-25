@@ -21,6 +21,17 @@ const DEV_BUILD = process.env.NODE_ENV !== 'production';
 // Is this for an extension?
 const FOR_EXTENSION = !! process.env.FFZ_EXTENSION;
 
+// Is this a loadable (unpacked) extension build? The extension is laid out as
+// dist/extension/{manifest.json,content.js,icons/,web/}, with all webpack output
+// under web/ — entry_ext.js loads the bundles from runtime.getURL('web'). The
+// dev server keeps the flat layout.
+const EXT_BUILD = FOR_EXTENSION && ! DEV_SERVER;
+const EXT_ROOT = path.resolve(__dirname, 'dist/extension');
+
+// Only web/ is cleaned by webpack, so clear the rest of the package ourselves.
+if ( EXT_BUILD )
+	require('fs').rmSync(EXT_ROOT, {recursive: true, force: true});
+
 // --- Distribution host (DigitalOcean) ---------------------------------------
 // Where YOUR built client is hosted: the loader (src/entry.js) and the webpack
 // code chunks load from here. Defaults to the upstream FFZ CDN, so an unset
@@ -101,18 +112,41 @@ const ENTRY_POINTS = {
 if ( FOR_EXTENSION )
 	ENTRY_POINTS.worker = './src/worker.ts';
 
-const COPY_PATTERNS = [
-	{
-		from: FOR_EXTENSION
-			? './src/entry_ext.js'
-			: './src/entry.js',
-		to: `${SCRIPT_DIR}${(DEV_SERVER || DEV_BUILD) ? 'script.js' : 'script.min.js'}`,
-		// The loader runs before the bundle and is copied verbatim (not run
-		// through esbuild), so inject the configured code host here by replacing
-		// the __FFZ_CDN__ placeholder in src/entry.js.
-		transform: content => content.toString().replaceAll('__FFZ_CDN__', CDN_BASE)
-	},
-];
+const COPY_PATTERNS = EXT_BUILD
+	? [
+		{
+			from: './src/entry_ext.js',
+			to: path.join(EXT_ROOT, 'content.js')
+		},
+		{
+			from: './extension/icons',
+			to: path.join(EXT_ROOT, 'icons')
+		},
+		{
+			from: './extension/manifest.json',
+			to: path.join(EXT_ROOT, 'manifest.json'),
+			// Chrome only accepts 1-4 dot-separated integers as a version, so
+			// use the fork's build number as the fourth component.
+			transform: content => {
+				const manifest = JSON.parse(content.toString());
+				manifest.version = [VERSION.major, VERSION.minor, VERSION.patch, ...(build_number ? [build_number] : [])].join('.');
+				manifest.version_name = `${manifest.version} (${commit_hash.slice(0, 7)})`;
+				return JSON.stringify(manifest, null, 2);
+			}
+		}
+	]
+	: [
+		{
+			from: FOR_EXTENSION
+				? './src/entry_ext.js'
+				: './src/entry.js',
+			to: `${SCRIPT_DIR}${(DEV_SERVER || DEV_BUILD) ? 'script.js' : 'script.min.js'}`,
+			// The loader runs before the bundle and is copied verbatim (not run
+			// through esbuild), so inject the configured code host here by replacing
+			// the __FFZ_CDN__ placeholder in src/entry.js.
+			transform: content => content.toString().replaceAll('__FFZ_CDN__', CDN_BASE)
+		},
+	];
 
 // The userscript injector (the installable .user.js). Served alongside the
 // loader so the install + auto-update URL live on your own host. Same
@@ -131,9 +165,12 @@ const config = {
 	mode: DEV_BUILD
 		? 'development'
 		: 'production',
+	// Production extension builds ship without source maps to keep the package small.
 	devtool: DEV_BUILD
 		? 'inline-source-map'
-		: 'source-map',
+		: EXT_BUILD
+			? false
+			: 'source-map',
 
 	target: ['web', TARGET],
 
@@ -170,7 +207,9 @@ const config = {
 		publicPath: FOR_EXTENSION
 			? 'auto'
 			: FILE_PATH,
-		path: path.resolve(__dirname, 'dist'),
+		path: EXT_BUILD
+			? path.join(EXT_ROOT, 'web')
+			: path.resolve(__dirname, 'dist'),
 		// Entry bundles use stable names so the loader can request them at a
 		// fixed /script/{flavor}.js path (it cache-busts with ?_=<ts>); chunks
 		// keep content hashes. With CDN_LAYOUT they go under /script and /static.
@@ -209,11 +248,12 @@ const config = {
 	},
 
 	plugins: [
-		new CycloneDxWebpackPlugin({
+		// The SBOM would end up inside the extension's web/ directory.
+		...(EXT_BUILD ? [] : [new CycloneDxWebpackPlugin({
 			specVersion: '1.6',
 			outputLocation: './bom',
 			includeWellknown: false
-		}),
+		})]),
 		new CopyPlugin({
 			patterns: COPY_PATTERNS
 		}),
@@ -234,9 +274,10 @@ const config = {
 			// metadata comment survives (esbuild would otherwise strip comments).
 			exclude: /\.user\.js$/
 		}),
-		new WebpackManifestPlugin({
+		// Its manifest.json would be mistaken for the extension's own manifest.
+		...(EXT_BUILD ? [] : [new WebpackManifestPlugin({
 			publicPath: ''
-		})
+		})])
 	],
 
 	module: {

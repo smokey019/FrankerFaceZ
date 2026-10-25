@@ -1,6 +1,10 @@
 /* eslint strict: off */
 'use strict';
 (() => {
+	// Non-HTML documents (JSON, XML) have no body to inject into.
+	if ( ! document.body )
+		return;
+
 	const browser = globalThis.browser ?? globalThis.chrome;
 	const is_firefox = (typeof browser === 'object' && browser.runtime.getURL('').startsWith('moz'));
 

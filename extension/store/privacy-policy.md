@@ -18,6 +18,10 @@ SmokeyZ itself has no analytics, tracking or advertising, and no error reporting
 
 SmokeyZ does not collect your Twitch password or payment information, and the author does not sell or share data with third parties.
 
+## Add-ons
+
+SmokeyZ includes a catalog of community-made FrankerFaceZ add-ons, bundled inside the extension. All add-ons are off by default. When you turn one on in the Add-Ons menu, it runs on Twitch pages and may contact its own service, which is run by that add-on's author or a third party and not by SmokeyZ. Examples: 7TV, BetterTTV and FFZ:AP (emote lookups for the channels you view), a pronouns service (usernames), EloWard (usernames), custom-command bot APIs, and Google Translate (messages you choose to translate). Each add-on's description in the menu says what it does. Their data handling is governed by those services' own policies. Add-ons you never enable do not run and send nothing.
+
 ## Permissions
 
 The extension runs only on `twitch.tv` pages and requests no other browser permissions.

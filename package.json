@@ -14,7 +14,7 @@
 		"dev:prod": "cross-env NODE_ENV=production webpack serve",
 		"dev:ext": "cross-env NODE_ENV=development FFZ_EXTENSION=true webpack serve",
 		"build": "bun run build:prod",
-		"build:ext": "cross-env NODE_ENV=production FFZ_EXTENSION=true webpack build",
+		"build:ext": "cross-env NODE_ENV=production FFZ_EXTENSION=true webpack build && node bin/fetch_addons.js",
 		"package:ext": "bun run build:ext && node bin/package_extension.js",
 		"build:stats": "cross-env NODE_ENV=production webpack build --json > stats.json",
 		"build:prod": "cross-env NODE_ENV=production webpack build",

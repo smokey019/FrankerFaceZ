@@ -19,6 +19,7 @@ SmokeyZ adds custom emotes, chat features and interface tweaks to Twitch.tv.
 - Custom emotes and badges in chat, with an emote menu and emote cards
 - Chat filtering, highlights, mentions and message formatting options
 - Layout, theme and player tweaks, configurable from the Home > Settings menu on Twitch
+- A built-in catalog of community add-ons (all off until you enable them)
 - Settings are stored locally in the extension and kept in sync across your Twitch tabs
 
 SmokeyZ is a community fork of the open-source FrankerFaceZ project (Apache-2.0). It is not made by, endorsed by or affiliated with Twitch Interactive, Inc. or the FrankerFaceZ team. Source code: https://github.com/smokey019/FrankerFaceZ
@@ -39,7 +40,7 @@ Only runs on twitch.tv. Do not run it alongside FrankerFaceZ or a FrankerFaceZ u
 - *`externally_connectable` (twitch.tv):* Lets the injected page script talk to the extension's service worker to read and save settings.
 - No `host_permissions`, `tabs`, `storage` or other API permissions are requested.
 
-**Remote code:** No. All code is bundled in the package. Data (emote sets, badges, translations) is fetched as JSON and images, never executed.
+**Remote code:** No. All code is bundled in the package, including the community add-ons (`web/addons/`), which are fetched at build time by `bin/fetch_addons.js` and shipped in the zip. Data (emote sets, badges, translations) is fetched as JSON and images, never executed.
 
 **Data usage:** tick *Personally identifiable information* (your Twitch login name is sent to the FrankerFaceZ socket server) and *Website content* (the channel being viewed and links in chat, for emotes and link previews). Certify that data is not sold, not used for unrelated purposes and not used for creditworthiness. See `privacy-policy.md` for what leaves the browser.
 

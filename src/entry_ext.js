@@ -1,8 +1,10 @@
 /* eslint strict: off */
 'use strict';
 (() => {
-	// Non-HTML documents (JSON, XML) have no body to inject into.
-	if ( ! document.body )
+	// Non-HTML documents (JSON, XML) have no body to inject into. Also skip
+	// about:blank and srcdoc frames, which the manifest never injects into but
+	// the service worker's re-injection can reach.
+	if ( ! document.body || ! /^https?:$/.test(location.protocol) )
 		return;
 
 	// The service worker re-injects this script into tabs the browser missed,

@@ -41,6 +41,46 @@ async function setMuted(tab_id: number, muted: boolean) {
 }
 
 
+// The browser normally injects the content script itself, but it can miss tabs
+// that were restored while it was starting up. Inject it into any twitch.tv tab
+// that is missing it. entry_ext.js ignores pages it has already run on.
+const SKIP_HOSTS = /^(?:localhost\.rig|blog|im|chatdepot|tmi|api|brand|dev|gql|passport)\./;
+
+async function ensureInjected(tab: chrome.tabs.Tab) {
+	// Without host permission for a tab, its url is hidden, so this also
+	// ignores every tab that isn't on twitch.tv.
+	if ( ! tab.id || ! tab.url || tab.discarded || tab.status !== 'complete' )
+		return;
+
+	try {
+		const url = new URL(tab.url);
+		if ( ! /(?:^|\.)twitch\.tv$/.test(url.hostname) || SKIP_HOSTS.test(url.hostname) || /disable_frankerfacez/.test(url.search) )
+			return;
+
+		await browser.scripting.executeScript({
+			target: {tabId: tab.id, allFrames: true},
+			files: ['content.js']
+		});
+
+	} catch(err) {
+		// The tab was closed, discarded, or is showing an error page.
+	}
+}
+
+async function injectIntoTabs() {
+	for(const tab of await browser.tabs.query({url: ['*://*.twitch.tv/*']}))
+		ensureInjected(tab);
+}
+
+browser.runtime.onStartup.addListener(injectIntoTabs);
+browser.runtime.onInstalled.addListener(injectIntoTabs);
+
+browser.tabs.onUpdated.addListener((tab_id, info, tab) => {
+	if ( info.status === 'complete' )
+		ensureInjected(tab);
+});
+
+
 // Now, the settings proxy.
 const connections: Set<chrome.runtime.Port> = new Set;
 (globalThis as any).connections = connections;

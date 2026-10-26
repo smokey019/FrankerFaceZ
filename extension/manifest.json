@@ -19,6 +19,12 @@
 			"32": "icons/icon32.png"
 		}
 	},
+	"permissions": [
+		"scripting"
+	],
+	"host_permissions": [
+		"*://*.twitch.tv/*"
+	],
 	"background": {
 		"service_worker": "web/worker.js"
 	},

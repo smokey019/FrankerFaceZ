@@ -24,7 +24,7 @@ SmokeyZ includes a catalog of community-made FrankerFaceZ add-ons, bundled insid
 
 ## Permissions
 
-The extension runs only on `twitch.tv` pages and requests no other browser permissions.
+The extension runs only on `twitch.tv` pages. It requests the `scripting` permission and access to `twitch.tv` only so it can re-inject its own bundled script into Twitch tabs the browser did not load it into, such as tabs restored at browser startup. It requests no other browser permissions.
 
 ## Contact
 

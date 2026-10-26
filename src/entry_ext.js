@@ -5,6 +5,11 @@
 	if ( ! document.body )
 		return;
 
+	// The service worker re-injects this script into tabs the browser missed,
+	// so it can run twice. Stay quiet if the extension already handled this page.
+	if ( document.body.dataset.ffzSource === 'extension' )
+		return;
+
 	const browser = globalThis.browser ?? globalThis.chrome;
 	const is_firefox = (typeof browser === 'object' && browser.runtime.getURL('').startsWith('moz'));
 

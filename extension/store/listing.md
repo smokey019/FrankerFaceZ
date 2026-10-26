@@ -38,7 +38,8 @@ Only runs on twitch.tv. Do not run it alongside FrankerFaceZ or a FrankerFaceZ u
 - *Content script on `*://*.twitch.tv/*` (all frames):* Loads the bundled SmokeyZ code into Twitch pages, including the Twitch player and clips pages, which are separate twitch.tv hosts. `api.twitch.tv` is excluded.
 - *`web_accessible_resources` (`web/*`):* The content script injects the bundled script into the page so it can interact with Twitch's own page code. Restricted to twitch.tv.
 - *`externally_connectable` (twitch.tv):* Lets the injected page script talk to the extension's service worker to read and save settings.
-- No `host_permissions`, `tabs`, `storage` or other API permissions are requested.
+- *`scripting` and host permission for `*://*.twitch.tv/*`:* Chrome occasionally fails to run the content script in Twitch tabs that were restored while the browser was starting, which leaves the extension silently missing until the tab is reloaded. On startup and when a Twitch tab finishes loading, the service worker uses `scripting.executeScript` to inject the same bundled `content.js` into twitch.tv tabs that don't have it yet. It never injects anything else and never touches other sites.
+- No `tabs`, `storage` or other API permissions are requested.
 
 **Remote code:** No. All code is bundled in the package, including the community add-ons (`web/addons/`), which are fetched at build time by `bin/fetch_addons.js` and shipped in the zip. Data (emote sets, badges, translations) is fetched as JSON and images, never executed.
 

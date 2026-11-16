@@ -2116,7 +2116,12 @@ export default class ChatHook extends Module {
 		inst._ffz_no_raid = setTimeout(() => {
 			inst._ffz_no_raid = null;
 
-			if ( inst.props && inst.props.raid && ! inst.isRaidCreator && inst.hasJoinedCurrentRaid ) {
+			// Twitch renamed isRaidCreator to canManageRaid, which also covers
+			// editors. hasJoinedCurrentRaid is always true for them, so leaving
+			// would pull them out of the raid they are running.
+			const manages = inst.isRaidCreator || inst.canManageRaid;
+
+			if ( inst.props && inst.props.raid && ! manages && inst.hasJoinedCurrentRaid ) {
 				const id = inst.props.raid.id;
 				if ( this.joined_raids.has(id) )
 					return;

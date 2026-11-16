@@ -413,7 +413,9 @@ export default class CSSTweaks extends Module {
 			default: true,
 			ui: {
 				path: 'Appearance > Layout >> Top Navigation',
-				title: 'Show Prime Gaming Loot.',
+				title: 'Show Amazon Luna Benefits (Prime offers).',
+				description: 'Formerly Prime Gaming Loot.',
+				getExtraTerms: () => ['luna', 'amazon', 'prime', 'gaming', 'loot', 'benefits'],
 				component: 'setting-check-box'
 			},
 			changed: val => this.toggleHide('prime-offers', !val)

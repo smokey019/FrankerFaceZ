@@ -20,7 +20,6 @@ import SettingsMenu from './settings_menu';
 import EmoteMenu from './emote_menu';
 import Input from './input';
 import ViewerCards from './viewer_card';
-import ModNotices from './mod_notices';
 import { isHighlightedReward, isMessageEffect } from './points';
 
 
@@ -231,7 +230,6 @@ export default class ChatHook extends Module {
 		this.inject(EmoteMenu);
 		this.inject(Input);
 		this.inject(ViewerCards);
-		this.inject(ModNotices);
 
 		this.ChatLeaderboard = this.fine.define(
 			'chat-leaderboard',
@@ -2116,12 +2114,7 @@ export default class ChatHook extends Module {
 		inst._ffz_no_raid = setTimeout(() => {
 			inst._ffz_no_raid = null;
 
-			// Twitch renamed isRaidCreator to canManageRaid, which also covers
-			// editors. hasJoinedCurrentRaid is always true for them, so leaving
-			// would pull them out of the raid they are running.
-			const manages = inst.isRaidCreator || inst.canManageRaid;
-
-			if ( inst.props && inst.props.raid && ! manages && inst.hasJoinedCurrentRaid ) {
+			if ( inst.props && inst.props.raid && ! inst.canManageRaid && inst.hasJoinedCurrentRaid ) {
 				const id = inst.props.raid.id;
 				if ( this.joined_raids.has(id) )
 					return;

@@ -767,6 +767,16 @@ export default class SettingsManager extends Module<'settings', SettingsEvents> 
 			wanted = localStorage.ffzProviderv2;
 			if ( wanted == null )
 				wanted = localStorage.ffzProviderv2 = await this.sniffProvider();
+
+			// The saved choice can name a provider this page doesn't have, like
+			// the userscript's storage after moving to the extension. Sniff
+			// rather than fall back to an empty localStorage, but keep the saved
+			// choice so it still applies if that provider comes back.
+			else if ( ! this.providers[wanted] ) {
+				const saved = wanted;
+				wanted = await this.sniffProvider();
+				this.log.info(`Saved provider "${saved}" is not available. Using "${wanted}" instead.`);
+			}
 		}
 
 		if ( this.providers[wanted] ) {

@@ -98,6 +98,20 @@ function newPort(port: chrome.runtime.Port) {
 	});
 
 	port.onMessage.addListener(msg => {
+		// ExtensionProvider.hasContent asks this while the page is still picking
+		// a provider, so it isn't an RPC and nothing is waiting on a reply id.
+		if ( msg?.ffz_type === 'check-has-keys' ) {
+			initializeCache().then(() => {
+				port.postMessage({
+					type: 'has-keys',
+					value: Array.from(cache!.keys()).some(key => ! IGNORE_CONTENT_KEYS.includes(key))
+				});
+			}).catch(() => {
+				port.postMessage({type: 'has-keys', value: false});
+			});
+			return;
+		}
+
 		const type = msg?.ffz_type as keyof CorsRpcTypes;
 		const id = msg?.id  as number | undefined;
 		if ( ! type )
@@ -187,6 +201,14 @@ function broadcast(msg: any, exclude?: chrome.runtime.Port) {
 
 // IndexedDB Operations
 let cache: Map<string, any> | null = null;
+
+// Keys that don't count as having settings. Mirrors IGNORE_CONTENT_KEYS in
+// src/settings/providers.ts.
+const IGNORE_CONTENT_KEYS = [
+	'client-id',
+	'cfg-seen',
+	'cfg-collapsed'
+];
 
 const DB_VERSION = 1,
 	_db_handle = new Map<string, IDBDatabase>,

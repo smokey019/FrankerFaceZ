@@ -1586,7 +1586,7 @@ export class ExtensionProvider extends RemoteSettingsProvider {
 			}
 
 			manager.on('ext:message', listener);
-			manager.emit('ext:message', { type: 'check-has-keys' });
+			manager.emit('ext:post-message', { ffz_type: 'check-has-keys' });
 
 			timeout = setTimeout(cleanup, 1000);
 		});
@@ -1621,6 +1621,14 @@ export class ExtensionProvider extends RemoteSettingsProvider {
 
 	disableEvents() {
 		this.manager.off('ext:message', this.handleMessage, this);
+	}
+
+	handleMessage(msg: CorsMessage) {
+		// Answers hasContent, which listens for it on its own.
+		if ( (msg as any)?.type === 'has-keys' )
+			return;
+
+		super.handleMessage(msg);
 	}
 
 	// Communication
